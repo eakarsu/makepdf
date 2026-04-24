@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Bates Numbering - MakePDF{% endblock %}
+{% block heading %}Bates Numbering{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Add Bates Numbers</h2>
+    <form data-async action="/bates/add" method="post" data-filename="bates_numbered.pdf">
+        <label for="ba_file">PDF file</label>
+        <input type="file" id="ba_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="ba_prefix">Prefix</label>
+                <input type="text" id="ba_prefix" name="prefix" placeholder="DOC-">
+            </div>
+            <div>
+                <label for="ba_suffix">Suffix</label>
+                <input type="text" id="ba_suffix" name="suffix" placeholder="">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="ba_start">Start number</label>
+                <input type="number" id="ba_start" name="start" value="1" min="0">
+            </div>
+            <div>
+                <label for="ba_digits">Digits</label>
+                <input type="number" id="ba_digits" name="digits" value="6" min="1" max="12">
+            </div>
+            <div>
+                <label for="ba_pos">Position</label>
+                <select id="ba_pos" name="position">
+                    <option value="bottom-center">Bottom Center</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="bottom-right">Bottom Right</option>
+                    <option value="top-center">Top Center</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="top-right">Top Right</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Bates Numbers</button>
+    </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Transform PDF - MakePDF{% endblock %}
+{% block heading %}Transform PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Compress</h2>
+    <form data-async action="/transform/compress" method="post" data-filename="compressed.pdf">
+        <label for="c_file">PDF file</label>
+        <input type="file" id="c_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">Compress</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Text Watermark</h2>
+    <form data-async action="/transform/watermark/text" method="post" data-filename="watermarked.pdf">
+        <label for="tw_file">PDF file</label>
+        <input type="file" id="tw_file" name="pdf_file" accept=".pdf" required>
+        <label for="wm_text">Watermark text</label>
+        <input type="text" id="wm_text" name="text" required placeholder="CONFIDENTIAL">
+        <div class="row">
+            <div>
+                <label for="wm_opacity">Opacity (0-1)</label>
+                <input type="number" id="wm_opacity" name="opacity" value="0.3" min="0" max="1" step="0.05">
+            </div>
+            <div>
+                <label for="wm_angle">Angle</label>
+                <input type="number" id="wm_angle" name="angle" value="45" step="1">
+            </div>
+            <div>
+                <label for="wm_fs">Font size</label>
+                <input type="number" id="wm_fs" name="font_size" value="60" min="10" max="200">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Watermark</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Image Watermark</h2>
+    <form data-async action="/transform/watermark/image" method="post" data-filename="watermarked.pdf">
+        <label for="iw_file">PDF file</label>
+        <input type="file" id="iw_file" name="pdf_file" accept=".pdf" required>
+        <label for="iw_img">Watermark image</label>
+        <input type="file" id="iw_img" name="image_file" accept="image/*" required>
+        <div class="row">
+            <div>
+                <label for="iw_opacity">Opacity (0-1)</label>
+                <input type="number" id="iw_opacity" name="opacity" value="0.3" min="0" max="1" step="0.05">
+            </div>
+            <div>
+                <label for="iw_pos">Position</label>
+                <select id="iw_pos" name="position">
+                    <option value="center">Center</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="top-right">Top Right</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="bottom-right">Bottom Right</option>
+                </select>
+            </div>
+            <div>
+                <label for="iw_scale">Scale</label>
+                <input type="number" id="iw_scale" name="scale" value="0.5" min="0.1" max="2" step="0.1">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Watermark</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Headers &amp; Footers</h2>
+    <form data-async action="/transform/headers-footers" method="post" data-filename="with_headers_footers.pdf">
+        <label for="hf_file">PDF file</label>
+        <input type="file" id="hf_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="hl">Header left</label>
+                <input type="text" id="hl" name="header_left" placeholder="{page}">
+            </div>
+            <div>
+                <label for="hc">Header center</label>
+                <input type="text" id="hc" name="header_center" placeholder="Document Title">
+            </div>
+            <div>
+                <label for="hr">Header right</label>
+                <input type="text" id="hr" name="header_right">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="fl">Footer left</label>
+                <input type="text" id="fl" name="footer_left">
+            </div>
+            <div>
+                <label for="fc">Footer center</label>
+                <input type="text" id="fc" name="footer_center" placeholder="Page {page} of {total}">
+            </div>
+            <div>
+                <label for="fr">Footer right</label>
+                <input type="text" id="fr" name="footer_right">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="hf_font">Font</label>
+                <select id="hf_font" name="font">
+                    <option>Helvetica</option>
+                    <option>Times-Roman</option>
+                    <option>Courier</option>
+                </select>
+            </div>
+            <div>
+                <label for="hf_fs">Font size</label>
+                <input type="number" id="hf_fs" name="font_size" value="10" min="6" max="24">
+            </div>
+            <div>
+                <label for="hf_start">Start page</label>
+                <input type="number" id="hf_start" name="start_page" value="1" min="1">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Headers/Footers</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Encrypt</h2>
+    <form data-async action="/transform/encrypt" method="post" data-filename="encrypted.pdf">
+        <label for="enc_file">PDF file</label>
+        <input type="file" id="enc_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="user_pw">User password</label>
+                <input type="password" id="user_pw" name="user_password" required>
+            </div>
+            <div>
+                <label for="owner_pw">Owner password (optional)</label>
+                <input type="password" id="owner_pw" name="owner_password">
+            </div>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" id="allow_print" name="allow_printing" value="true" checked>
+            <label for="allow_print">Allow printing</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" id="allow_copy" name="allow_copying" value="true" checked>
+            <label for="allow_copy">Allow copying</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" id="allow_mod" name="allow_modifying" value="true">
+            <label for="allow_mod">Allow modifying</label>
+        </div>
+        <button type="submit" class="btn">Encrypt</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Decrypt</h2>
+    <form data-async action="/transform/decrypt" method="post" data-filename="decrypted.pdf">
+        <label for="dec_file">PDF file</label>
+        <input type="file" id="dec_file" name="pdf_file" accept=".pdf" required>
+        <label for="dec_pw">Password</label>
+        <input type="password" id="dec_pw" name="password" required>
+        <button type="submit" class="btn">Decrypt</button>
+    </form>
+</div>
+
+{% endblock %}

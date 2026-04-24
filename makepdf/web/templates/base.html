@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MakePDF{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a class="nav-brand" href="/">MakePDF</a>
+        <div class="nav-links">
+            <a href="/create">Create</a>
+            <a href="/edit">Edit</a>
+            <a href="/merge">Merge &amp; Split</a>
+            <a href="/extract">Extract</a>
+            <a href="/transform">Transform</a>
+            <a href="/forms">Forms</a>
+            <a href="/sign">Sign</a>
+            <a href="/ocr">OCR</a>
+            <a href="/redact">Redact</a>
+            <a href="/crop">Crop</a>
+            <a href="/stamp">Stamp</a>
+            <a href="/bates">Bates</a>
+            <a href="/compare">Compare</a>
+            <a href="/flatten">Flatten</a>
+            <a href="/metadata">Metadata</a>
+            <a href="/attach">Attach</a>
+            <a href="/link">Links</a>
+            <a href="/optimize">Optimize</a>
+            <a href="/a11y">Accessibility</a>
+            <a href="/markup">Markup</a>
+        </div>
+    </nav>
+    <main class="container">
+        <h1>{% block heading %}{% endblock %}</h1>
+        <div id="alert" class="alert hidden"></div>
+        {% block content %}{% endblock %}
+    </main>
+    <script src="/static/js/app.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

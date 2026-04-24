@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Crop PDF - MakePDF{% endblock %}
+{% block heading %}Crop PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Crop Pages</h2>
+    <form data-async action="/crop/pages" method="post" data-filename="cropped.pdf">
+        <label for="cp_file">PDF file</label>
+        <input type="file" id="cp_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="cp_left">Left</label>
+                <input type="number" id="cp_left" name="left" value="0" step="0.1" required>
+            </div>
+            <div>
+                <label for="cp_bottom">Bottom</label>
+                <input type="number" id="cp_bottom" name="bottom" value="0" step="0.1" required>
+            </div>
+            <div>
+                <label for="cp_right">Right</label>
+                <input type="number" id="cp_right" name="right" value="0" step="0.1" required>
+            </div>
+            <div>
+                <label for="cp_top">Top</label>
+                <input type="number" id="cp_top" name="top" value="0" step="0.1" required>
+            </div>
+        </div>
+        <button type="submit" class="btn">Crop Pages</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Resize Pages</h2>
+    <form data-async action="/crop/resize" method="post" data-filename="resized.pdf">
+        <label for="cr_file">PDF file</label>
+        <input type="file" id="cr_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="cr_w">Width (points)</label>
+                <input type="number" id="cr_w" name="width" value="612" step="0.1" required>
+            </div>
+            <div>
+                <label for="cr_h">Height (points)</label>
+                <input type="number" id="cr_h" name="height" value="792" step="0.1" required>
+            </div>
+        </div>
+        <button type="submit" class="btn">Resize</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Trim Margins</h2>
+    <form data-async action="/crop/trim" method="post" data-filename="trimmed.pdf">
+        <label for="ct_file">PDF file</label>
+        <input type="file" id="ct_file" name="pdf_file" accept=".pdf" required>
+        <label for="ct_margin">Margin (points)</label>
+        <input type="number" id="ct_margin" name="margin" value="36" step="0.1" required>
+        <button type="submit" class="btn">Trim</button>
+    </form>
+</div>
+
+{% endblock %}

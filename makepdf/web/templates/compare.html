@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Compare PDFs - MakePDF{% endblock %}
+{% block heading %}Compare PDFs{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Text Comparison</h2>
+    <form data-async action="/compare/text" method="post" data-json>
+        <label for="ct_a">First PDF</label>
+        <input type="file" id="ct_a" name="pdf_a" accept=".pdf" required>
+        <label for="ct_b">Second PDF</label>
+        <input type="file" id="ct_b" name="pdf_b" accept=".pdf" required>
+        <button type="submit" class="btn">Compare Text</button>
+    </form>
+    <pre id="compare-text-result" class="result-box hidden"></pre>
+</div>
+
+<div class="card">
+    <h2>Comparison Report</h2>
+    <form data-async action="/compare/report" method="post" data-filename="comparison_report.pdf">
+        <label for="cr_a">First PDF</label>
+        <input type="file" id="cr_a" name="pdf_a" accept=".pdf" required>
+        <label for="cr_b">Second PDF</label>
+        <input type="file" id="cr_b" name="pdf_b" accept=".pdf" required>
+        <button type="submit" class="btn">Generate Report</button>
+    </form>
+</div>
+
+{% endblock %}

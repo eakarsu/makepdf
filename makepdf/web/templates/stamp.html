@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Stamp PDF - MakePDF{% endblock %}
+{% block heading %}Stamp PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Add Stamp</h2>
+    <form data-async action="/stamp/add" method="post" data-filename="stamped.pdf">
+        <label for="sa_file">PDF file</label>
+        <input type="file" id="sa_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="sa_type">Stamp type</label>
+                <select id="sa_type" name="stamp_type">
+                    <option value="approved">Approved</option>
+                    <option value="draft">Draft</option>
+                    <option value="confidential">Confidential</option>
+                    <option value="final">Final</option>
+                    <option value="not-approved">Not Approved</option>
+                </select>
+            </div>
+            <div>
+                <label for="sa_pos">Position</label>
+                <select id="sa_pos" name="position">
+                    <option value="center">Center</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="top-right">Top Right</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="bottom-right">Bottom Right</option>
+                </select>
+            </div>
+            <div>
+                <label for="sa_opacity">Opacity (0-1)</label>
+                <input type="number" id="sa_opacity" name="opacity" value="0.5" min="0" max="1" step="0.05">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Stamp</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Custom Text Stamp</h2>
+    <form data-async action="/stamp/custom" method="post" data-filename="stamped.pdf">
+        <label for="sc_file">PDF file</label>
+        <input type="file" id="sc_file" name="pdf_file" accept=".pdf" required>
+        <label for="sc_text">Stamp text</label>
+        <input type="text" id="sc_text" name="text" required placeholder="REVIEWED">
+        <label for="sc_fs">Font size</label>
+        <input type="number" id="sc_fs" name="font_size" value="36" min="10" max="200">
+        <button type="submit" class="btn">Add Custom Stamp</button>
+    </form>
+</div>
+
+{% endblock %}

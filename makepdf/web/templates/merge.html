@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Merge &amp; Split - MakePDF{% endblock %}
+{% block heading %}Merge &amp; Split{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Merge PDFs</h2>
+    <form data-async action="/merge" method="post" data-filename="merged.pdf">
+        <label for="merge_files">Select PDF files (2+)</label>
+        <input type="file" id="merge_files" name="pdf_files" accept=".pdf" multiple required>
+        <div class="hint">Files are merged in the order selected.</div>
+        <button type="submit" class="btn">Merge</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Split PDF</h2>
+    <form data-async action="/split" method="post" data-filename="split_pdfs.zip">
+        <label for="split_file">PDF file</label>
+        <input type="file" id="split_file" name="pdf_file" accept=".pdf" required>
+        <label for="ranges">Page ranges</label>
+        <input type="text" id="ranges" name="ranges" required placeholder="1-3,4-6,7-10">
+        <div class="hint">Comma-separated ranges, 1-indexed. Each range becomes a separate PDF.</div>
+        <button type="submit" class="btn">Split</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Extract Pages</h2>
+    <form data-async action="/extract-pages" method="post" data-filename="extracted_pages.pdf">
+        <label for="ep_file">PDF file</label>
+        <input type="file" id="ep_file" name="pdf_file" accept=".pdf" required>
+        <label for="pages">Pages to extract</label>
+        <input type="text" id="pages" name="pages" required placeholder="1,3,5,8">
+        <div class="hint">Comma-separated page numbers, 1-indexed.</div>
+        <button type="submit" class="btn">Extract Pages</button>
+    </form>
+</div>
+
+{% endblock %}

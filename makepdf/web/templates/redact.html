@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Redact PDF - MakePDF{% endblock %}
+{% block heading %}Redact PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Redact Area</h2>
+    <form data-async action="/redact/area" method="post" data-filename="redacted.pdf">
+        <label for="ra_file">PDF file</label>
+        <input type="file" id="ra_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="ra_page">Page number</label>
+                <input type="number" id="ra_page" name="page_num" value="1" min="1" required>
+            </div>
+            <div>
+                <label for="ra_x">X position</label>
+                <input type="number" id="ra_x" name="x" value="0" step="0.1" required>
+            </div>
+            <div>
+                <label for="ra_y">Y position</label>
+                <input type="number" id="ra_y" name="y" value="0" step="0.1" required>
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="ra_w">Width</label>
+                <input type="number" id="ra_w" name="width" value="100" step="0.1" required>
+            </div>
+            <div>
+                <label for="ra_h">Height</label>
+                <input type="number" id="ra_h" name="height" value="20" step="0.1" required>
+            </div>
+        </div>
+        <button type="submit" class="btn">Redact Area</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Redact Text</h2>
+    <form data-async action="/redact/text" method="post" data-filename="redacted.pdf">
+        <label for="rt_file">PDF file</label>
+        <input type="file" id="rt_file" name="pdf_file" accept=".pdf" required>
+        <label for="rt_term">Search term</label>
+        <input type="text" id="rt_term" name="search_term" required placeholder="Text to redact">
+        <button type="submit" class="btn">Redact Text</button>
+    </form>
+</div>
+
+{% endblock %}

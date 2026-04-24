@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}MakePDF - PDF Toolkit{% endblock %}
+{% block heading %}PDF Toolkit{% endblock %}
+{% block content %}
+<p style="color: var(--text-light); margin-bottom: 1.5rem;">
+    Create, edit, merge, extract, transform, and sign PDFs right from your browser.
+</p>
+<div class="grid">
+    <a href="/create" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Create</h2>
+        <p>Generate PDFs from text, HTML, Markdown, or images.</p>
+    </a>
+    <a href="/edit" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Edit</h2>
+        <p>Add text or images to existing PDF pages.</p>
+    </a>
+    <a href="/merge" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Merge &amp; Split</h2>
+        <p>Combine multiple PDFs or split into parts.</p>
+    </a>
+    <a href="/extract" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Extract</h2>
+        <p>Pull text or images out of PDF files.</p>
+    </a>
+    <a href="/transform" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Transform</h2>
+        <p>Compress, watermark, encrypt, or add headers.</p>
+    </a>
+    <a href="/forms" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Forms</h2>
+        <p>Create fillable forms, fill fields, extract data.</p>
+    </a>
+    <a href="/sign" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Sign</h2>
+        <p>Add signature images and verify signatures.</p>
+    </a>
+    <a href="/ocr" class="card" style="text-decoration:none; color:inherit;">
+        <h2>OCR</h2>
+        <p>Extract text from scanned PDFs with OCR.</p>
+    </a>
+    <a href="/redact" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Redact</h2>
+        <p>Black out sensitive areas or text in PDFs.</p>
+    </a>
+    <a href="/crop" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Crop</h2>
+        <p>Crop, resize, or trim margins on PDF pages.</p>
+    </a>
+    <a href="/stamp" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Stamp</h2>
+        <p>Add preset or custom text stamps to PDFs.</p>
+    </a>
+    <a href="/bates" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Bates Numbering</h2>
+        <p>Add Bates numbers for legal document identification.</p>
+    </a>
+    <a href="/compare" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Compare</h2>
+        <p>Compare two PDFs by text or generate a visual diff report.</p>
+    </a>
+    <a href="/flatten" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Flatten</h2>
+        <p>Flatten forms, annotations, or all interactive elements.</p>
+    </a>
+    <a href="/metadata" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Metadata</h2>
+        <p>View or edit PDF document metadata properties.</p>
+    </a>
+    <a href="/attach" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Attachments</h2>
+        <p>Add, list, or extract file attachments from PDFs.</p>
+    </a>
+    <a href="/link" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Links</h2>
+        <p>Add hyperlinks to PDF pages or extract existing links.</p>
+    </a>
+    <a href="/optimize" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Optimize</h2>
+        <p>Reduce PDF file size by removing duplication.</p>
+    </a>
+    <a href="/a11y" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Accessibility</h2>
+        <p>Set document language and check accessibility compliance.</p>
+    </a>
+    <a href="/markup" class="card" style="text-decoration:none; color:inherit;">
+        <h2>Markup</h2>
+        <p>Add highlights and sticky notes to PDF pages.</p>
+    </a>
+</div>
+{% endblock %}

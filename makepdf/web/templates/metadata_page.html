@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}PDF Metadata - MakePDF{% endblock %}
+{% block heading %}PDF Metadata{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Get Metadata</h2>
+    <form data-async action="/metadata/get" method="post" data-json>
+        <label for="mg_file">PDF file</label>
+        <input type="file" id="mg_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">Get Metadata</button>
+    </form>
+    <pre id="metadata-result" class="result-box hidden"></pre>
+</div>
+
+<div class="card">
+    <h2>Set Metadata</h2>
+    <form data-async action="/metadata/set" method="post" data-filename="with_metadata.pdf">
+        <label for="ms_file">PDF file</label>
+        <input type="file" id="ms_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="ms_title">Title</label>
+                <input type="text" id="ms_title" name="title" placeholder="Document title">
+            </div>
+            <div>
+                <label for="ms_author">Author</label>
+                <input type="text" id="ms_author" name="author" placeholder="Author name">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="ms_subject">Subject</label>
+                <input type="text" id="ms_subject" name="subject" placeholder="Document subject">
+            </div>
+            <div>
+                <label for="ms_keywords">Keywords</label>
+                <input type="text" id="ms_keywords" name="keywords" placeholder="keyword1, keyword2">
+            </div>
+        </div>
+        <button type="submit" class="btn">Set Metadata</button>
+    </form>
+</div>
+
+{% endblock %}

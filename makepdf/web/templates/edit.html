@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Edit PDF - MakePDF{% endblock %}
+{% block heading %}Edit PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Add Text</h2>
+    <form data-async action="/edit/add-text" method="post" data-filename="edited.pdf">
+        <label for="pdf_text">PDF file</label>
+        <input type="file" id="pdf_text" name="pdf_file" accept=".pdf" required>
+        <label for="edit_text">Text to add</label>
+        <textarea id="edit_text" name="text" rows="3" required placeholder="Text to overlay on the PDF..."></textarea>
+        <div class="row">
+            <div>
+                <label for="page_num_t">Page (0-indexed)</label>
+                <input type="number" id="page_num_t" name="page_num" value="0" min="0">
+            </div>
+            <div>
+                <label for="x_t">X position</label>
+                <input type="number" id="x_t" name="x" value="72" step="0.1">
+            </div>
+            <div>
+                <label for="y_t">Y position</label>
+                <input type="number" id="y_t" name="y" value="700" step="0.1">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="font_edit">Font</label>
+                <select id="font_edit" name="font">
+                    <option>Helvetica</option>
+                    <option>Times-Roman</option>
+                    <option>Courier</option>
+                </select>
+            </div>
+            <div>
+                <label for="fs_edit">Font size</label>
+                <input type="number" id="fs_edit" name="font_size" value="12" min="6" max="72" step="0.5">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="cr">Red (0-1)</label>
+                <input type="number" id="cr" name="color_r" value="0" min="0" max="1" step="0.1">
+            </div>
+            <div>
+                <label for="cg">Green (0-1)</label>
+                <input type="number" id="cg" name="color_g" value="0" min="0" max="1" step="0.1">
+            </div>
+            <div>
+                <label for="cb">Blue (0-1)</label>
+                <input type="number" id="cb" name="color_b" value="0" min="0" max="1" step="0.1">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Text</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Add Image</h2>
+    <form data-async action="/edit/add-image" method="post" data-filename="edited.pdf">
+        <label for="pdf_img">PDF file</label>
+        <input type="file" id="pdf_img" name="pdf_file" accept=".pdf" required>
+        <label for="img_file">Image to add</label>
+        <input type="file" id="img_file" name="image_file" accept="image/*" required>
+        <div class="row">
+            <div>
+                <label for="page_num_i">Page (0-indexed)</label>
+                <input type="number" id="page_num_i" name="page_num" value="0" min="0">
+            </div>
+            <div>
+                <label for="x_i">X position</label>
+                <input type="number" id="x_i" name="x" value="72" step="0.1">
+            </div>
+            <div>
+                <label for="y_i">Y position</label>
+                <input type="number" id="y_i" name="y" value="500" step="0.1">
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label for="w_i">Width (optional)</label>
+                <input type="number" id="w_i" name="width" step="0.1" placeholder="Auto">
+            </div>
+            <div>
+                <label for="h_i">Height (optional)</label>
+                <input type="number" id="h_i" name="height" step="0.1" placeholder="Auto">
+            </div>
+        </div>
+        <button type="submit" class="btn">Add Image</button>
+    </form>
+</div>
+
+{% endblock %}

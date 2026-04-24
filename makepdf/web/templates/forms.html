@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}PDF Forms - MakePDF{% endblock %}
+{% block heading %}PDF Forms{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Create Form</h2>
+    <form data-async action="/forms/create" method="post" data-filename="form.pdf">
+        <label for="fields_json">Fields definition (JSON)</label>
+        <textarea id="fields_json" name="fields_json" rows="8" required placeholder='[
+  {"name": "full_name", "type": "text", "x": 100, "y": 700, "width": 200, "height": 20, "label": "Full Name"},
+  {"name": "agree", "type": "checkbox", "x": 100, "y": 660},
+  {"name": "country", "type": "dropdown", "x": 100, "y": 620, "width": 200, "height": 20, "options": ["USA", "UK", "Other"]}
+]'></textarea>
+        <div class="row">
+            <div>
+                <label for="form_ps">Page size</label>
+                <select id="form_ps" name="page_size">
+                    <option>A4</option>
+                    <option>letter</option>
+                    <option>legal</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Create Form</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Fill Form</h2>
+    <form data-async action="/forms/fill" method="post" data-filename="filled_form.pdf">
+        <label for="fill_file">PDF form file</label>
+        <input type="file" id="fill_file" name="pdf_file" accept=".pdf" required>
+        <label for="data_json">Field values (JSON)</label>
+        <textarea id="data_json" name="data_json" rows="4" required placeholder='{"full_name": "Jane Doe", "agree": true, "country": "UK"}'></textarea>
+        <button type="submit" class="btn">Fill Form</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Extract Form Data</h2>
+    <form data-async action="/forms/extract" method="post" data-json-target="extract-result">
+        <label for="ext_file">PDF form file</label>
+        <input type="file" id="ext_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">Extract Data</button>
+    </form>
+    <div id="extract-result" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>List Form Fields</h2>
+    <form data-async action="/forms/list-fields" method="post" data-json-target="fields-result">
+        <label for="list_file">PDF form file</label>
+        <input type="file" id="list_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">List Fields</button>
+    </form>
+    <div id="fields-result" class="result-box hidden"></div>
+</div>
+
+{% endblock %}

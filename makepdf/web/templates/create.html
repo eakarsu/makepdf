@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Create PDF - MakePDF{% endblock %}
+{% block heading %}Create PDF{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>From Text</h2>
+    <form data-async action="/create/text" method="post" data-filename="created.pdf">
+        <label for="text">Text content</label>
+        <textarea id="text" name="text" rows="6" required placeholder="Enter your text here..."></textarea>
+        <div class="row">
+            <div>
+                <label for="font">Font</label>
+                <select id="font" name="font">
+                    <option>Helvetica</option>
+                    <option>Times-Roman</option>
+                    <option>Courier</option>
+                </select>
+            </div>
+            <div>
+                <label for="font_size">Font size</label>
+                <input type="number" id="font_size" name="font_size" value="12" min="6" max="72">
+            </div>
+            <div>
+                <label for="page_size_text">Page size</label>
+                <select id="page_size_text" name="page_size">
+                    <option>A4</option>
+                    <option>letter</option>
+                    <option>legal</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Create PDF</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>From HTML</h2>
+    <form data-async action="/create/html" method="post" data-filename="created_from_html.pdf">
+        <label for="html_text">HTML content</label>
+        <textarea id="html_text" name="html_text" rows="6" placeholder="<h1>Hello</h1><p>Your HTML here...</p>"></textarea>
+        <label for="html_file">Or upload HTML file</label>
+        <input type="file" id="html_file" name="html_file" accept=".html,.htm">
+        <div class="row">
+            <div>
+                <label for="page_size_html">Page size</label>
+                <select id="page_size_html" name="page_size">
+                    <option>A4</option>
+                    <option>letter</option>
+                    <option>legal</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Create PDF</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>From Markdown</h2>
+    <form data-async action="/create/markdown" method="post" data-filename="created_from_markdown.pdf">
+        <label for="md_text">Markdown content</label>
+        <textarea id="md_text" name="md_text" rows="6" placeholder="# Title&#10;&#10;Your **markdown** here..."></textarea>
+        <label for="md_file">Or upload Markdown file</label>
+        <input type="file" id="md_file" name="md_file" accept=".md,.markdown,.txt">
+        <div class="row">
+            <div>
+                <label for="page_size_md">Page size</label>
+                <select id="page_size_md" name="page_size">
+                    <option>A4</option>
+                    <option>letter</option>
+                    <option>legal</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Create PDF</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>From Images</h2>
+    <form data-async action="/create/images" method="post" data-filename="created_from_images.pdf">
+        <label for="images">Select images</label>
+        <input type="file" id="images" name="images" accept="image/*" multiple required>
+        <div class="hint">Each image becomes one PDF page.</div>
+        <div class="row">
+            <div>
+                <label for="page_size_img">Page size</label>
+                <select id="page_size_img" name="page_size">
+                    <option>A4</option>
+                    <option>letter</option>
+                    <option>legal</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn">Create PDF</button>
+    </form>
+</div>
+
+{% endblock %}

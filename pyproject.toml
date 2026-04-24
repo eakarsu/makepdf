@@ -1,0 +1,30 @@
+[project]
+name = "makepdf"
+version = "0.1.0"
+description = "Complete PDF generation and manipulation toolkit"
+requires-python = ">=3.10"
+dependencies = [
+    "reportlab>=4.0",
+    "pypdf>=3.0",
+    "Pillow>=10.0",
+    "typer[all]>=0.9",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.6",
+    "markdown>=3.4",
+    "cryptography>=41.0",
+]
+
+[project.optional-dependencies]
+ocr = ["pytesseract>=0.3", "pdf2image>=1.16"]
+html = ["weasyprint>=60"]
+all = ["makepdf[ocr,html]"]
+dev = ["pytest>=7", "pytest-cov", "ruff", "mypy"]
+
+[project.scripts]
+makepdf = "makepdf.cli.app:app"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

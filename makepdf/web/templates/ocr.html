@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}OCR - MakePDF{% endblock %}
+{% block heading %}OCR{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Extract Text (OCR)</h2>
+    <form data-async action="/ocr/extract-text" method="post" data-json-target="ocr-text-result">
+        <label for="ocr_file">Scanned PDF file</label>
+        <input type="file" id="ocr_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="ocr_lang">Language</label>
+                <input type="text" id="ocr_lang" name="language" value="eng" placeholder="eng">
+                <div class="hint">Tesseract language code (e.g. eng, deu, fra).</div>
+            </div>
+        </div>
+        <button type="submit" class="btn">Extract Text</button>
+    </form>
+    <div id="ocr-text-result" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>Make Searchable PDF</h2>
+    <form data-async action="/ocr/make-searchable" method="post" data-filename="searchable.pdf">
+        <label for="ocr_s_file">Scanned PDF file</label>
+        <input type="file" id="ocr_s_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="ocr_s_lang">Language</label>
+                <input type="text" id="ocr_s_lang" name="language" value="eng" placeholder="eng">
+            </div>
+        </div>
+        <button type="submit" class="btn">Make Searchable</button>
+    </form>
+</div>
+
+{% endblock %}
