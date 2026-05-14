@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}AI Tools - MakePDF{% endblock %}
+{% block heading %}AI Tools{% endblock %}
+{% block content %}
+
+<div class="card">
+    <p style="color: var(--text-light); margin-bottom: 0.75rem;">
+        AI-assisted PDF features (classification, summarization, PII redaction,
+        form-fill mapping). All endpoints require the <code>X-API-Key</code>
+        header and return <strong>503</strong> when <code>OPENROUTER_API_KEY</code>
+        is not configured.
+    </p>
+    <label for="ai_api_key">X-API-Key</label>
+    <input type="password" id="ai_api_key" placeholder="X-API-Key" autocomplete="off">
+    <div class="hint">Stored in browser localStorage.</div>
+    <div class="row">
+        <button type="button" class="btn" id="ai_save_key">Save key</button>
+        <button type="button" class="btn btn-secondary" id="ai_clear_key">Clear</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Classify Document</h2>
+    <p style="color: var(--text-light);">
+        POST <code>/api/classify</code> &mdash; tags a PDF as
+        contract / invoice / resume / medical / court_filing / report /
+        manual / letter / other.
+    </p>
+    <form id="form_classify" data-feature="classify">
+        <label for="cl_file">PDF file</label>
+        <input type="file" id="cl_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">Classify</button>
+    </form>
+    <div id="result_classify" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>Summarize PDF</h2>
+    <p style="color: var(--text-light);">
+        POST <code>/api/summarize</code> &mdash; extracts text + asks the LLM
+        for a 2&ndash;4 sentence summary, key points, and named entities.
+    </p>
+    <form id="form_summarize" data-feature="summarize">
+        <label for="su_file">PDF file</label>
+        <input type="file" id="su_file" name="pdf_file" accept=".pdf" required>
+        <button type="submit" class="btn">Summarize</button>
+    </form>
+    <div id="result_summarize" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>Smart Redact (PII)</h2>
+    <p style="color: var(--text-light);">
+        POST <code>/api/smart-redact</code> &mdash; AI + regex PII detection.
+        Use <em>Preview</em> for a dry run; otherwise the redacted PDF is
+        downloaded.
+    </p>
+    <form id="form_smart_redact" data-feature="smart-redact">
+        <label for="sr_file">PDF file</label>
+        <input type="file" id="sr_file" name="pdf_file" accept=".pdf" required>
+        <div class="row">
+            <div>
+                <label for="sr_policy">Policy</label>
+                <select id="sr_policy" name="policy">
+                    <option value="default">default</option>
+                    <option value="hipaa">hipaa</option>
+                    <option value="gdpr">gdpr</option>
+                    <option value="pci">pci</option>
+                </select>
+            </div>
+            <div>
+                <label>
+                    <input type="checkbox" id="sr_preview"> Preview only
+                </label>
+                <div class="hint">Return proposed spans without writing redactions.</div>
+            </div>
+        </div>
+        <button type="submit" class="btn">Run Smart Redact</button>
+    </form>
+    <div id="result_smart_redact" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>AI Form Fill</h2>
+    <p style="color: var(--text-light);">
+        POST <code>/api/ai-fill-form</code> &mdash; map source JSON data to
+        the AcroForm fields of a blank PDF form. Use <em>Preview</em> to see
+        the mapping before filling.
+    </p>
+    <form id="form_ai_fill" data-feature="ai-fill-form">
+        <label for="aff_file">Blank PDF form</label>
+        <input type="file" id="aff_file" name="pdf_file" accept=".pdf" required>
+        <label for="aff_source">Source data (JSON object)</label>
+        <textarea id="aff_source" name="source_json" rows="6" required
+            placeholder='{"name": "Jane Doe", "email": "jane@example.com"}'></textarea>
+        <label>
+            <input type="checkbox" id="aff_preview" name="preview" value="true"> Preview only
+        </label>
+        <button type="submit" class="btn">Fill Form</button>
+    </form>
+    <div id="result_ai_fill" class="result-box hidden"></div>
+</div>
+
+<div class="card">
+    <h2>Audit Log</h2>
+    <p style="color: var(--text-light);">
+        Every AI call above is recorded. View paginated history at
+        <a href="/ai-results">/ai-results</a>.
+    </p>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    var KEY_STORAGE = 'makepdf_api_key';
+    var keyEl = document.getElementById('ai_api_key');
+    keyEl.value = localStorage.getItem(KEY_STORAGE) || '';
+
+    document.getElementById('ai_save_key').addEventListener('click', function () {
+        localStorage.setItem(KEY_STORAGE, keyEl.value.trim());
+        showAlert('API key saved to localStorage.', 'success');
+    });
+    document.getElementById('ai_clear_key').addEventListener('click', function () {
+        localStorage.removeItem(KEY_STORAGE);
+        keyEl.value = '';
+        showAlert('API key cleared.', 'success');
+    });
+
+    function getKey() {
+        return (keyEl.value || localStorage.getItem(KEY_STORAGE) || '').trim();
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderJson(target, data) {
+        target.innerHTML = '<pre style="white-space:pre-wrap;background:var(--bg);padding:0.5rem;border-radius:var(--radius);">'
+            + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        target.classList.remove('hidden');
+    }
+
+    function downloadBlob(blob, filename) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function postForm(url, formData, apiKey) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'X-API-Key': apiKey },
+            body: formData,
+        });
+    }
+
+    function bindForm(formId, url, resultId, opts) {
+        opts = opts || {};
+        var form = document.getElementById(formId);
+        var resultBox = document.getElementById(resultId);
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            hideAlert();
+            var apiKey = getKey();
+            if (!apiKey) {
+                showAlert('X-API-Key required. Save a key first.', 'error');
+                return;
+            }
+            var btn = form.querySelector('button[type="submit"]');
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Processing...';
+            resultBox.classList.add('hidden');
+
+            var data = new FormData(form);
+            var finalUrl = url;
+            if (opts.queryFromForm) {
+                var qs = opts.queryFromForm(form, data);
+                if (qs) finalUrl += (finalUrl.indexOf('?') === -1 ? '?' : '&') + qs;
+            }
+
+            postForm(finalUrl, data, apiKey).then(function (resp) {
+                var ct = resp.headers.get('content-type') || '';
+                if (resp.status === 503) {
+                    return resp.json().then(function (j) {
+                        showAlert(j.detail || 'Service unavailable. OPENROUTER_API_KEY is not configured.', 'error');
+                    });
+                }
+                if (!resp.ok) {
+                    return resp.json().then(function (j) {
+                        showAlert(j.detail || j.error || ('HTTP ' + resp.status), 'error');
+                    }).catch(function () {
+                        showAlert('HTTP ' + resp.status, 'error');
+                    });
+                }
+                if (ct.indexOf('application/pdf') !== -1) {
+                    return resp.blob().then(function (b) {
+                        downloadBlob(b, (opts.downloadName || 'output.pdf'));
+                        showAlert('Downloaded ' + (opts.downloadName || 'output.pdf'), 'success');
+                    });
+                }
+                return resp.json().then(function (data) {
+                    renderJson(resultBox, data);
+                    showAlert('Done.', 'success');
+                });
+            }).catch(function (err) {
+                showAlert(String(err && err.message || err), 'error');
+            }).then(function () {
+                btn.disabled = false;
+                btn.textContent = origText;
+            });
+        });
+    }
+
+    bindForm('form_classify', '/api/classify', 'result_classify');
+    bindForm('form_summarize', '/api/summarize', 'result_summarize');
+    bindForm('form_smart_redact', '/api/smart-redact', 'result_smart_redact', {
+        queryFromForm: function (form, data) {
+            var policy = form.querySelector('#sr_policy').value || 'default';
+            var preview = form.querySelector('#sr_preview').checked ? 'true' : 'false';
+            data.delete('policy');
+            return 'policy=' + encodeURIComponent(policy) + '&preview=' + preview;
+        },
+        downloadName: 'smart_redacted.pdf'
+    });
+    bindForm('form_ai_fill', '/api/ai-fill-form', 'result_ai_fill', {
+        downloadName: 'ai_filled_form.pdf'
+    });
+})();
+</script>
+{% endblock %}

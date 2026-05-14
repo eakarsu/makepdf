@@ -14,6 +14,8 @@ dependencies = [
     "python-multipart>=0.0.6",
     "markdown>=3.4",
     "cryptography>=41.0",
+    # Async HTTP client — used for OpenRouter API calls (summarize, smart-redact)
+    "httpx>=0.25",
 ]
 
 [project.optional-dependencies]

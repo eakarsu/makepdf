@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}AI Results - MakePDF{% endblock %}
+{% block heading %}AI Call History{% endblock %}
+{% block content %}
+
+<div class="card">
+    <p style="color: var(--text-light); margin-bottom: 1rem;">
+        Paginated audit log of every AI call. Each row exposes feature, model, latency,
+        success/error status, and the input/output JSON. Requires an
+        <code>X-API-Key</code> header just like the AI endpoints themselves.
+    </p>
+
+    <div class="row">
+        <div>
+            <label for="ar_api_key">API Key</label>
+            <input type="password" id="ar_api_key" placeholder="X-API-Key" autocomplete="off">
+        </div>
+        <div>
+            <label for="ar_feature">Feature filter</label>
+            <input type="text" id="ar_feature" placeholder="e.g. summarize">
+        </div>
+        <div>
+            <label for="ar_limit">Page size</label>
+            <input type="number" id="ar_limit" value="20" min="1" max="100">
+        </div>
+    </div>
+    <button type="button" class="btn" id="ar_load">Load</button>
+</div>
+
+<div class="card hidden" id="ar_status_card">
+    <p id="ar_status"></p>
+</div>
+
+<div class="card">
+    <h2>Stats</h2>
+    <p style="color: var(--text-light); margin-bottom: 1rem; font-size: 0.9rem;">
+        Aggregated success rate and latency per feature over a recent window
+        (uses the same <code>X-API-Key</code> as above).
+    </p>
+    <div class="row">
+        <div>
+            <label for="ar_stats_days">Window (days)</label>
+            <input type="number" id="ar_stats_days" value="7" min="1" max="365">
+        </div>
+    </div>
+    <button type="button" class="btn" id="ar_stats_load">Load stats</button>
+    <div id="ar_stats_out" style="margin-top: 1rem;"></div>
+</div>
+
+<div class="card hidden" id="ar_results_card">
+    <h2>Results</h2>
+    <div id="ar_results"></div>
+    <div class="row" style="margin-top: 1rem;">
+        <button type="button" class="btn" id="ar_prev">Prev</button>
+        <span id="ar_page_info" style="align-self:center;"></span>
+        <button type="button" class="btn" id="ar_next">Next</button>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+    var page = 1;
+    var totalPages = 1;
+    var els = {
+        apiKey: document.getElementById('ar_api_key'),
+        feature: document.getElementById('ar_feature'),
+        limit: document.getElementById('ar_limit'),
+        load: document.getElementById('ar_load'),
+        status: document.getElementById('ar_status'),
+        statusCard: document.getElementById('ar_status_card'),
+        resultsCard: document.getElementById('ar_results_card'),
+        results: document.getElementById('ar_results'),
+        pageInfo: document.getElementById('ar_page_info'),
+        prev: document.getElementById('ar_prev'),
+        next: document.getElementById('ar_next'),
+    };
+
+    function setStatus(msg, isError) {
+        els.status.textContent = msg;
+        els.status.style.color = isError ? 'var(--error)' : 'var(--text-light)';
+        els.statusCard.classList.remove('hidden');
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function renderRow(row) {
+        var statusBadge = row.success
+            ? '<span style="color:var(--success);font-weight:600;">success</span>'
+            : '<span style="color:var(--error);font-weight:600;">error</span>';
+        var meta = [
+            '<strong>' + escapeHtml(row.feature || '?') + '</strong>',
+            '<code>' + escapeHtml(row.model || '?') + '</code>',
+            statusBadge,
+            (row.latency_ms != null ? row.latency_ms + ' ms' : '?'),
+            escapeHtml(row.created_at || '')
+        ].join(' &middot; ');
+
+        var details = '';
+        if (row.error_message) {
+            details += '<p style="color:var(--error);font-size:0.85rem;">' + escapeHtml(row.error_message) + '</p>';
+        }
+        details += '<details style="margin-top:0.5rem;font-size:0.85rem;">'
+            + '<summary>Input / Output</summary>'
+            + '<pre style="white-space:pre-wrap;background:var(--bg);padding:0.5rem;border-radius:var(--radius);">'
+            + escapeHtml(JSON.stringify({input: row.input, output: row.output}, null, 2))
+            + '</pre></details>';
+
+        return '<div style="border-bottom:1px solid var(--border);padding:0.75rem 0;">'
+            + '<div style="font-size:0.9rem;">' + meta + '</div>'
+            + details
+            + '</div>';
+    }
+
+    function load() {
+        var apiKey = els.apiKey.value.trim();
+        if (!apiKey) {
+            setStatus('API key required.', true);
+            return;
+        }
+        var feature = els.feature.value.trim();
+        var limit = Math.max(1, Math.min(100, parseInt(els.limit.value || '20', 10) || 20));
+
+        var params = new URLSearchParams();
+        params.set('page', String(page));
+        params.set('limit', String(limit));
+        if (feature) params.set('feature', feature);
+
+        setStatus('Loading...', false);
+        els.resultsCard.classList.add('hidden');
+
+        fetch('/api/ai-results?' + params.toString(), {
+            headers: { 'X-API-Key': apiKey }
+        }).then(function(r) {
+            return r.json().then(function(j) { return { ok: r.ok, status: r.status, body: j }; });
+        }).then(function(res) {
+            if (!res.ok) {
+                setStatus(res.body && (res.body.detail || res.body.error) || ('HTTP ' + res.status), true);
+                return;
+            }
+            var rows = res.body.results || [];
+            totalPages = res.body.totalPages || 1;
+            els.pageInfo.textContent = 'page ' + page + ' / ' + totalPages
+                + ' (' + (res.body.total || 0) + ' total)';
+            if (rows.length === 0) {
+                els.results.innerHTML = '<p style="color:var(--text-light);">No AI results.</p>';
+            } else {
+                els.results.innerHTML = rows.map(renderRow).join('');
+            }
+            els.resultsCard.classList.remove('hidden');
+            setStatus('Loaded ' + rows.length + ' rows.', false);
+        }).catch(function(err) {
+            setStatus(String(err && err.message || err), true);
+        });
+    }
+
+    els.load.addEventListener('click', function() { page = 1; load(); });
+    els.prev.addEventListener('click', function() {
+        if (page > 1) { page--; load(); }
+    });
+    els.next.addEventListener('click', function() {
+        if (page < totalPages) { page++; load(); }
+    });
+
+    // ------------------------------------------------------------------
+    // Stats panel — surfaces /api/ai-results/stats
+    // ------------------------------------------------------------------
+    var statsEls = {
+        days: document.getElementById('ar_stats_days'),
+        load: document.getElementById('ar_stats_load'),
+        out: document.getElementById('ar_stats_out'),
+    };
+
+    function pct(n) {
+        return (Math.round((n || 0) * 10000) / 100).toFixed(2) + '%';
+    }
+
+    function renderStats(data) {
+        var perFeature = data.perFeature || [];
+        var totals = data.totals || {};
+        if (perFeature.length === 0) {
+            return '<p style="color:var(--text-light);">No AI calls in window.</p>';
+        }
+        var rows = perFeature.map(function(r) {
+            return '<tr>'
+                + '<td>' + escapeHtml(r.feature || '?') + '</td>'
+                + '<td>' + (r.count || 0) + '</td>'
+                + '<td>' + (r.successCount || 0) + '</td>'
+                + '<td>' + (r.errorCount || 0) + '</td>'
+                + '<td>' + pct(r.successRate) + '</td>'
+                + '<td>' + (r.avgLatencyMs != null ? r.avgLatencyMs + ' ms' : '?') + '</td>'
+                + '<td>' + (r.maxLatencyMs != null ? r.maxLatencyMs + ' ms' : '?') + '</td>'
+                + '</tr>';
+        }).join('');
+        var totalsLine = '<p style="margin-top:0.75rem;font-size:0.9rem;">'
+            + '<strong>Totals:</strong> ' + (totals.count || 0) + ' calls, '
+            + (totals.successCount || 0) + ' OK, '
+            + (totals.errorCount || 0) + ' errors, '
+            + pct(totals.successRate) + ' success'
+            + '</p>';
+        return '<div style="overflow-x:auto;">'
+            + '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">'
+            + '<thead><tr style="text-align:left;border-bottom:1px solid var(--border);">'
+            + '<th>Feature</th><th>Count</th><th>OK</th><th>Err</th>'
+            + '<th>Success</th><th>Avg Latency</th><th>Max Latency</th>'
+            + '</tr></thead><tbody>' + rows + '</tbody></table>'
+            + '</div>' + totalsLine;
+    }
+
+    statsEls.load.addEventListener('click', function() {
+        var apiKey = els.apiKey.value.trim();
+        if (!apiKey) {
+            statsEls.out.innerHTML = '<p style="color:var(--error);">API key required (top of page).</p>';
+            return;
+        }
+        var days = Math.max(1, Math.min(365, parseInt(statsEls.days.value || '7', 10) || 7));
+        var feature = els.feature.value.trim();
+        var params = new URLSearchParams();
+        params.set('days', String(days));
+        if (feature) params.set('feature', feature);
+
+        statsEls.out.innerHTML = '<p style="color:var(--text-light);">Loading...</p>';
+
+        fetch('/api/ai-results/stats?' + params.toString(), {
+            headers: { 'X-API-Key': apiKey }
+        }).then(function(r) {
+            return r.json().then(function(j) { return { ok: r.ok, status: r.status, body: j }; });
+        }).then(function(res) {
+            if (res.status === 503) {
+                statsEls.out.innerHTML = '<p style="color:var(--error);">AI is not configured (503): '
+                    + escapeHtml((res.body && (res.body.detail || res.body.error)) || '')
+                    + '</p>';
+                return;
+            }
+            if (!res.ok) {
+                statsEls.out.innerHTML = '<p style="color:var(--error);">'
+                    + escapeHtml((res.body && (res.body.detail || res.body.error)) || ('HTTP ' + res.status))
+                    + '</p>';
+                return;
+            }
+            statsEls.out.innerHTML = renderStats(res.body || {});
+        }).catch(function(err) {
+            statsEls.out.innerHTML = '<p style="color:var(--error);">'
+                + escapeHtml(String(err && err.message || err)) + '</p>';
+        });
+    });
+})();
+</script>
+{% endblock %}

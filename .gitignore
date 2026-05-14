@@ -68,3 +68,10 @@ tmp/
 coverage/
 .nyc_output/
 htmlcov/
+
+# makepdf dev artifacts (reported in audit)
+out.pdf
+input.txt
+makepdf.spec
+launcher.py
+makepdf.egg-info/
