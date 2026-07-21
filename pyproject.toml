@@ -7,13 +7,14 @@ dependencies = [
     "reportlab>=4.0",
     "pypdf>=3.0",
     "Pillow>=10.0",
-    "typer[all]>=0.9",
+    "typer>=0.9",
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "jinja2>=3.1",
     "python-multipart>=0.0.6",
     "markdown>=3.4",
     "cryptography>=41.0",
+    "PyMuPDF>=1.24",
     # Async HTTP client — used for OpenRouter API calls (summarize, smart-redact)
     "httpx>=0.25",
 ]
@@ -30,3 +31,9 @@ makepdf = "makepdf.cli.app:app"
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["makepdf*"]
+
+[tool.setuptools.package-data]
+"makepdf.web" = ["templates/*.html", "static/css/*.css", "static/js/*.js"]

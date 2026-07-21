@@ -15,12 +15,8 @@ router = APIRouter(prefix="/edit", tags=["edit"])
 
 
 async def _save_upload(upload: UploadFile, suffix: str = ".pdf") -> Path:
-    """Save an uploaded file to a temp location and return the path."""
-    fd, tmp = tempfile.mkstemp(suffix=suffix, dir=str(TEMP_DIR))
-    os.close(fd)
-    tmp_path = Path(tmp)
-    tmp_path.write_bytes(await upload.read())
-    return tmp_path
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, suffix)).path
 
 
 @router.get("", response_class=HTMLResponse)

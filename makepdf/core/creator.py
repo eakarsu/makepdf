@@ -1,5 +1,7 @@
 """PDF creation from various source formats."""
 
+import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -11,6 +13,26 @@ from reportlab.lib.utils import ImageReader
 from makepdf.exceptions import InputError, DependencyError
 from makepdf.utils import output_path, get_page_size
 from makepdf.config import DEFAULT_FONT, DEFAULT_FONT_SIZE
+
+
+class _OfflineResourceGuard(HTMLParser):
+    def handle_starttag(self, tag, attrs):
+        for name, value in attrs:
+            if name.lower() in {"src", "poster", "srcset"} and value:
+                if not value.strip().lower().startswith("data:"):
+                    raise InputError("HTML resource URLs must use embedded data: content.")
+            if name.lower() == "style" and value and re.search(r"(?:url\s*\(|@import)", value, re.I):
+                raise InputError("CSS resource loading is disabled during HTML rendering.")
+
+    def handle_data(self, data):
+        if re.search(r"(?:url\s*\(|@import)", data, re.I):
+            raise InputError("CSS resource loading is disabled during HTML rendering.")
+
+
+def _validate_offline_html(content: str) -> None:
+    guard = _OfflineResourceGuard()
+    guard.feed(content)
+    guard.close()
 
 
 def from_text(
@@ -79,9 +101,10 @@ def from_html(
     """
     if not html_content:
         raise InputError("HTML content must not be empty")
+    _validate_offline_html(html_content)
 
     try:
-        from weasyprint import HTML
+        from weasyprint import HTML, default_url_fetcher
     except ImportError:
         raise DependencyError(
             "WeasyPrint is required for HTML-to-PDF conversion. "
@@ -110,7 +133,13 @@ def from_html(
     page_css = f"@page {{ size: {css_dim}; margin: 1in; }}"
     styled_html = f"<style>{page_css}</style>{html_content}"
 
-    HTML(string=styled_html).write_pdf(str(out))
+    def offline_url_fetcher(url: str, *args, **kwargs):
+        # Untrusted HTML must not become an SSRF or local-file read primitive.
+        if url.startswith("data:"):
+            return default_url_fetcher(url, *args, **kwargs)
+        raise InputError("External and local URLs are disabled during HTML rendering.")
+
+    HTML(string=styled_html, url_fetcher=offline_url_fetcher).write_pdf(str(out))
     return out
 
 

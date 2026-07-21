@@ -72,11 +72,8 @@ POLICIES = {
 
 
 async def _save_upload(upload: UploadFile) -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, ".pdf")).path
 
 
 def _extract_text(pdf_path: Path) -> str:
@@ -89,19 +86,6 @@ def _extract_text(pdf_path: Path) -> str:
         if text:
             parts.append(text)
     return "\n\n".join(parts)
-
-
-def _ocr_extract_text(pdf_path: Path) -> str:
-    try:
-        import pytesseract
-        from pdf2image import convert_from_path
-    except ImportError:
-        return ""
-    try:
-        images = convert_from_path(str(pdf_path), dpi=200)
-        return "\n\n".join(pytesseract.image_to_string(img) for img in images)
-    except Exception:
-        return ""
 
 
 def _extract_pii_terms_from_ai(api_key: str, text: str) -> list[str]:
@@ -174,13 +158,11 @@ async def smart_redact_pdf(
         text = _extract_text(src)
         was_ocr_needed = False
         if not text.strip():
-            text = _ocr_extract_text(src)
             was_ocr_needed = True
-            if not text.strip():
-                raise HTTPException(
-                    status_code=422,
-                    detail="No text could be extracted (even with OCR fallback).",
-                )
+            raise HTTPException(
+                status_code=422,
+                detail="No text was extractable. Run the isolated async OCR workflow first.",
+            )
 
         pii_terms = _extract_pii_terms_from_ai(api_openrouter, text)
 

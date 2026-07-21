@@ -2,16 +2,21 @@
 
 import logging
 import os
+import time
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from makepdf.exceptions import MakePdfError
 from makepdf.web.shared import templates, STATIC_DIR
+from makepdf.config import MAX_UPLOAD_SIZE, SERVICE_ENV
+from makepdf.web.auth import Identity, authenticate_api_key, require_identity
+from makepdf.web.operations import configuration_errors, metrics
 
 from makepdf.web.routes import create, edit, merge, forms, extract, transform, ocr, sign
 from makepdf.web.routes import redact, crop_route, stamp_route, bates_route
@@ -28,9 +33,18 @@ from makepdf.web.routes import (
     ai_form_filler,
     ai_audit,
     ai_results,
+    governance,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def service_lifespan(_app: FastAPI):
+    errors = configuration_errors(require_worker=False)
+    if errors:
+        raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +74,48 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        started = time.monotonic()
+        response = await call_next(request)
+        metrics.observe(request.method, response.status_code, time.monotonic() - started)
+        return response
+
+
+class ProductionBoundaryMiddleware(BaseHTTPMiddleware):
+    """Enforce identity and coarse body limits before mutable production routes."""
+
+    _DURABLE_MUTATION_PREFIXES = (
+        "/api/ocr/",
+        "/api/jobs/",
+        "/api/governance/",
+        "/api/cloud-storage/",
+    )
+
+    async def dispatch(self, request: Request, call_next):
+        length = request.headers.get("content-length")
+        if length and length.isdigit() and int(length) > MAX_UPLOAD_SIZE + 1024 * 1024:
+            return JSONResponse(status_code=413, content={"detail": "Request exceeds the configured limit."})
+        if SERVICE_ENV == "production" and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            identity = authenticate_api_key(request.headers.get("X-API-Key"))
+            if not identity:
+                return JSONResponse(status_code=401, content={"detail": "A valid tenant user API key is required."})
+            request.state.identity = identity
+            if not request.url.path.startswith(self._DURABLE_MUTATION_PREFIXES):
+                return JSONResponse(
+                    status_code=410,
+                    content={
+                        "detail": (
+                            "Legacy synchronous transformations are disabled in production; "
+                            "use the local CLI/library or a durable API endpoint."
+                        )
+                    },
+                )
+        response = await call_next(request)
+        response.headers.setdefault("X-Request-ID", request.headers.get("X-Request-ID", os.urandom(12).hex()))
+        return response
+
+
 def create_app() -> FastAPI:
     """Build and return the configured FastAPI application."""
 
@@ -70,12 +126,15 @@ def create_app() -> FastAPI:
             "Protected endpoints require an ``X-API-Key`` header. "
             "AI endpoints are additionally rate-limited to 20/hr per key."
         ),
+        lifespan=service_lifespan,
     )
 
     # ------------------------------------------------------------------
     # Security middleware (helmet-equivalent + CORS + trusted hosts)
     # ------------------------------------------------------------------
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(MetricsMiddleware)
+    app.add_middleware(ProductionBoundaryMiddleware)
 
     cors_origins_env = os.getenv("MAKEPDF_CORS_ORIGINS", "").strip()
     if cors_origins_env:
@@ -133,8 +192,14 @@ def create_app() -> FastAPI:
     app.include_router(ai_form_filler.router)
     app.include_router(ai_audit.router)
     app.include_router(ai_results.router)
+    app.include_router(governance.router)
     from makepdf.web.routes import cloud_storage as _cs, workspaces as _ws, a11y_remediation as _ar, smart_table as _st, ediscovery as _ed, ocr_translate as _ot  # noqa: E402
-    app.include_router(_cs.router); app.include_router(_ws.router); app.include_router(_ar.router); app.include_router(_st.router); app.include_router(_ed.router); app.include_router(_ot.router)
+    app.include_router(_cs.router)
+    app.include_router(_ws.router)
+    app.include_router(_ar.router)
+    app.include_router(_st.router)
+    app.include_router(_ed.router)
+    app.include_router(_ot.router)
 
     # ------------------------------------------------------------------
     # Root + health
@@ -147,6 +212,18 @@ def create_app() -> FastAPI:
     async def health():
         """Health check — no auth required."""
         return {"status": "ok"}
+
+    @app.get("/ready")
+    async def ready():
+        errors = configuration_errors(require_worker=True)
+        return JSONResponse(
+            status_code=503 if errors else 200,
+            content={"status": "not-ready" if errors else "ready", "errors": errors},
+        )
+
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def service_metrics(_identity: Identity = Depends(require_identity)):
+        return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
 
     # ------------------------------------------------------------------
     # Error handlers
@@ -163,7 +240,7 @@ def create_app() -> FastAPI:
         logger.exception("Unhandled error: %s", exc)
         return JSONResponse(
             status_code=500,
-            content={"error": f"Internal server error: {exc}", "type": "ServerError"},
+            content={"error": "Internal server error", "type": "ServerError"},
         )
 
     return app

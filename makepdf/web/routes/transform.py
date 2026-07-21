@@ -17,11 +17,8 @@ router = APIRouter(prefix="/transform", tags=["transform"])
 
 
 async def _save_upload(upload: UploadFile, suffix: str = ".pdf") -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=suffix, dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, suffix)).path
 
 
 @router.get("", response_class=HTMLResponse)

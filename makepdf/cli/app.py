@@ -25,13 +25,17 @@ app = typer.Typer(
 @app.callback()
 def main(
     ctx: typer.Context,
-    pdf_file: Optional[Path] = typer.Argument(None, help="PDF file to read (extracts text by default)."),
+    pdf_file: Optional[Path] = typer.Option(
+        None,
+        "--open",
+        help="Open a PDF in the system viewer when no subcommand is supplied.",
+    ),
 ):
     """Complete PDF generation and manipulation toolkit.
 
     Pass a PDF file directly to open it in your default viewer:
 
-        makepdf file.pdf
+        makepdf --open file.pdf
     """
     if ctx.invoked_subcommand is not None:
         return

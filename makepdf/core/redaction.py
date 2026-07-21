@@ -1,167 +1,155 @@
-"""PDF redaction features — black-out areas, search-and-redact text.
+"""Irreversible PDF redaction with post-save recovery-path verification.
 
-Provides tools similar to Adobe Acrobat's redaction workflow: mark regions
-or text for redaction, then apply opaque rectangles that permanently obscure
-the content.  Overlays are merged via *pypdf* so the black boxes become part
-of the page content stream.
+Redaction is deliberately implemented with PyMuPDF's native redaction
+annotations.  Painting a rectangle into a content stream is *not* redaction:
+the original glyphs, images, attachments, metadata, or an incremental revision
+can otherwise remain recoverable.
 """
 
 from __future__ import annotations
 
-import io
 import re
 from pathlib import Path
-from typing import Sequence
-
-from pypdf import PdfReader, PdfWriter
-from reportlab.pdfgen.canvas import Canvas
+from typing import Iterable, Sequence
 
 from makepdf.exceptions import InputError
 from makepdf.utils import ensure_pdf, output_path
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _build_rect_overlay(
-    page_width: float,
-    page_height: float,
-    rects: list[tuple[float, float, float, float]],
-    fill_color: tuple[float, float, float],
-) -> io.BytesIO:
-    """Return an in-memory single-page PDF with filled rectangles.
-
-    Each rect is ``(x, y, width, height)`` in PDF points with the origin at
-    the bottom-left corner of the page.
-    """
-    buf = io.BytesIO()
-    c = Canvas(buf, pagesize=(page_width, page_height))
-    c.setFillColorRGB(*fill_color)
-    c.setStrokeColorRGB(*fill_color)
-    for x, y, w, h in rects:
-        c.rect(x, y, w, h, stroke=0, fill=1)
-    c.save()
-    buf.seek(0)
-    return buf
+def _fitz():
+    try:
+        import fitz
+    except ImportError as exc:  # pragma: no cover - packaging guard
+        raise InputError(
+            "Secure redaction requires PyMuPDF. Install the declared project "
+            "dependencies before using redaction."
+        ) from exc
+    return fitz
 
 
-def _page_dimensions(page) -> tuple[float, float]:
-    """Extract width and height from a pypdf page object."""
-    box = page.mediabox
-    return float(box.width), float(box.height)
-
-
-def _validate_fill_color(fill_color: tuple) -> None:
-    """Ensure *fill_color* is a 3-tuple of floats in [0, 1]."""
+def _validate_fill_color(fill_color: tuple) -> tuple[float, float, float]:
     if (
         not isinstance(fill_color, (tuple, list))
         or len(fill_color) != 3
-        or not all(isinstance(v, (int, float)) for v in fill_color)
+        or not all(isinstance(value, (int, float)) for value in fill_color)
+        or not all(0 <= value <= 1 for value in fill_color)
     ):
-        raise InputError(
-            "fill_color must be a 3-tuple of numeric values, "
-            f"e.g. (0, 0, 0). Got: {fill_color!r}"
-        )
-    if not all(0 <= v <= 1 for v in fill_color):
-        raise InputError(
-            "fill_color values must be between 0 and 1. "
-            f"Got: {fill_color!r}"
-        )
+        raise InputError("fill_color must contain three numeric values between 0 and 1.")
+    return tuple(float(value) for value in fill_color)
 
 
-def _find_text_positions_on_page(page, search_term: str) -> list[tuple[float, float, float, float]]:
-    """Return approximate bounding rectangles for *search_term* on *page*.
+def _assert_safe_source(doc) -> None:
+    """Fail closed when redaction would silently invalidate a signature."""
+    for page in doc:
+        for widget in page.widgets() or ():
+            if getattr(widget, "field_type_string", "").lower() == "signature":
+                raise InputError(
+                    "Signed PDFs must be reviewed and re-signed through an approved "
+                    "signature workflow after redaction; this operation refuses to "
+                    "silently invalidate a signature."
+                )
 
-    Uses the page's ``extract_text`` with layout preservation to find
-    occurrences, then estimates positions based on character-level visitor
-    data when available, falling back to a heuristic full-page scan.
 
-    Each returned tuple is ``(x, y, width, height)`` in PDF user-space
-    coordinates (origin at bottom-left).
-    """
-    rects: list[tuple[float, float, float, float]] = []
-    page_width, page_height = _page_dimensions(page)
-
-    # Attempt character-level extraction via visitor
-    parts: list[dict] = []
-
-    def visitor_body(text, cm, tm, font_dict, font_size):  # noqa: ARG001
-        """Collect text fragments with their transformation matrices."""
-        if text and text.strip():
-            # tm is the text matrix: [a, b, c, d, e, f]
-            # (e, f) gives the position in user space.
-            x_pos = tm[4]
-            y_pos = tm[5]
-            parts.append({
-                "text": text,
-                "x": float(x_pos),
-                "y": float(y_pos),
-                "font_size": float(font_size) if font_size else 12.0,
-            })
-
+def _apply_page_redactions(page) -> bool:
+    """Remove covered text, raster images, and vector graphics."""
     try:
-        page.extract_text(visitor_text=visitor_body)
-    except Exception:
-        # Visitor extraction is best-effort; fall back below.
-        parts = []
-
-    if parts:
-        # Walk through collected fragments, concatenate contiguous text, and
-        # locate the search term.
-        for part in parts:
-            text = part["text"]
-            idx = 0
-            while True:
-                pos = text.lower().find(search_term.lower(), idx)
-                if pos == -1:
-                    break
-                fs = part["font_size"]
-                # Approximate: each character is ~0.6 * font_size wide
-                char_width = fs * 0.6
-                x = part["x"] + pos * char_width
-                y = part["y"] - fs * 0.2  # slight downward offset
-                w = len(search_term) * char_width
-                h = fs * 1.4  # generous height to cover ascenders/descenders
-                rects.append((x, y, w, h))
-                idx = pos + 1
-
-    if not rects:
-        # Fallback: use plain extract_text to confirm the term is on the
-        # page, then do a simple heuristic overlay based on content stream
-        # analysis.
-        full_text = page.extract_text() or ""
-        if search_term.lower() in full_text.lower():
-            # Without precise glyph positions we create a conservative
-            # set of rectangles.  Split text into lines and estimate
-            # vertical position for each matching line.
-            lines = full_text.split("\n")
-            # Assume standard 12pt font, ~50 lines per page as baseline
-            estimated_line_height = page_height / max(len(lines), 1)
-            char_width_est = 7.0  # rough average for 12pt
-
-            for line_idx, line in enumerate(lines):
-                col = 0
-                lower_line = line.lower()
-                lower_term = search_term.lower()
-                while True:
-                    pos = lower_line.find(lower_term, col)
-                    if pos == -1:
-                        break
-                    x = 36 + pos * char_width_est  # 36pt ≈ 0.5 inch margin
-                    # PDF y-axis goes bottom-to-top; first line is near top
-                    y = page_height - (line_idx + 1) * estimated_line_height
-                    w = len(search_term) * char_width_est * 1.1
-                    h = estimated_line_height * 1.2
-                    rects.append((x, y, w, h))
-                    col = pos + 1
-
-    return rects
+        return bool(page.apply_redactions(images=1, graphics=1, text=0))
+    except TypeError:  # PyMuPDF versions before the graphics argument
+        return bool(page.apply_redactions(images=1, text=0))
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _scrub_document(doc) -> None:
+    """Remove non-page recovery channels before a fresh, non-incremental save."""
+    # Document.scrub handles embedded files, hidden text, JavaScript, metadata,
+    # XML metadata, thumbnails, and redaction remnants in one supported API.
+    doc.scrub(
+        attached_files=True,
+        clean_pages=True,
+        embedded_files=True,
+        hidden_text=True,
+        javascript=True,
+        metadata=True,
+        redactions=True,
+        redact_images=1,
+        remove_links=False,
+        reset_fields=True,
+        reset_responses=True,
+        thumbnails=True,
+        xml_metadata=True,
+    )
+    doc.set_metadata({})
+    if doc.xref_xml_metadata():
+        doc.del_xml_metadata()
+
+
+def _save_sanitized(doc, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # A new file with maximum garbage collection discards incremental history,
+    # unreachable objects, duplicate streams, and orphaned attachment objects.
+    doc.save(
+        str(destination),
+        incremental=False,
+        garbage=4,
+        clean=True,
+        deflate=True,
+        deflate_images=True,
+        deflate_fonts=True,
+        encryption=0,
+    )
+
+
+def verify_redaction(
+    pdf_path: str | Path,
+    forbidden_terms: Iterable[str] = (),
+) -> dict[str, int]:
+    """Verify sanitized structure and absence of case-insensitive terms.
+
+    Verification inspects extracted page text, file bytes, metadata, XML
+    metadata, embedded files, and incremental-update markers.  It cannot prove
+    that a caller selected the correct rectangle; that remains a human review
+    responsibility and is why redaction reports should retain the requested
+    coordinates outside the sanitized PDF.
+    """
+    fitz = _fitz()
+    path = ensure_pdf(pdf_path)
+    raw = path.read_bytes()
+    raw_lower = raw.lower()
+
+    if raw.count(b"%%EOF") != 1 or b"/prev" in raw_lower:
+        raise InputError("Redaction verification found recoverable incremental history.")
+
+    terms = [term.strip() for term in forbidden_terms if term and term.strip()]
+    with fitz.open(str(path)) as doc:
+        if doc.needs_pass:
+            raise InputError("Redacted output unexpectedly requires a password.")
+        if doc.embfile_count():
+            raise InputError("Redaction verification found an embedded attachment.")
+        metadata_blob = " ".join(str(value or "") for value in doc.metadata.values())
+        xml_blob = doc.get_xml_metadata() or ""
+        page_text = "\n".join(page.get_text("text") for page in doc)
+        searchable = f"{metadata_blob}\n{xml_blob}\n{page_text}".casefold()
+        for term in terms:
+            folded = term.casefold()
+            if folded in searchable:
+                raise InputError(f"Redaction verification found forbidden text: {term!r}.")
+            encoded = term.encode("utf-8", errors="ignore").lower()
+            if encoded and encoded in raw_lower:
+                raise InputError(f"Redaction verification found recoverable bytes: {term!r}.")
+
+        return {
+            "pages": doc.page_count,
+            "embedded_files": doc.embfile_count(),
+            "incremental_revisions": 0,
+            "forbidden_terms": len(terms),
+        }
+
+
+def _finish(doc, destination: Path, forbidden_terms: Iterable[str]) -> Path:
+    _scrub_document(doc)
+    _save_sanitized(doc, destination)
+    verify_redaction(destination, forbidden_terms)
+    return destination
+
 
 def redact_area(
     input_pdf: str | Path,
@@ -173,74 +161,33 @@ def redact_area(
     output: str | Path | None = None,
     fill_color: tuple[float, float, float] = (0, 0, 0),
 ) -> Path:
-    """Black out a rectangular area on a specific page.
+    """Permanently remove all content intersecting a rectangular region.
 
-    Draws an opaque filled rectangle over the specified region and merges it
-    into the page content stream so the underlying content is visually
-    obscured.
-
-    Parameters
-    ----------
-    input_pdf : str or Path
-        Path to the source PDF file.
-    page_num : int
-        Zero-indexed page number to redact.
-    x : float
-        Horizontal offset (points) from the left edge of the page.
-    y : float
-        Vertical offset (points) from the bottom edge of the page.
-    width : float
-        Width of the redaction rectangle in points.
-    height : float
-        Height of the redaction rectangle in points.
-    output : str, Path, or None
-        Destination path.  Defaults to ``<stem>_redacted.pdf``.
-    fill_color : tuple of float
-        RGB fill colour with each channel in ``[0, 1]``.  Defaults to black.
-
-    Returns
-    -------
-    Path
-        The path to the redacted PDF.
-
-    Raises
-    ------
-    InputError
-        If the file is not a valid PDF, the page number is out of range, or
-        the rectangle dimensions are invalid.
+    Coordinates retain the historic public API: points from the PDF's
+    bottom-left origin.  ``page_num`` is zero-indexed.
     """
-    pdf_path = ensure_pdf(input_pdf)
-    _validate_fill_color(fill_color)
-
-    reader = PdfReader(str(pdf_path))
-    num_pages = len(reader.pages)
-
-    if not isinstance(page_num, int) or page_num < 0 or page_num >= num_pages:
-        raise InputError(
-            f"page_num must be between 0 and {num_pages - 1} "
-            f"(PDF has {num_pages} page(s)). Got: {page_num}"
-        )
-
+    fitz = _fitz()
+    source = ensure_pdf(input_pdf)
+    color = _validate_fill_color(fill_color)
     if width <= 0 or height <= 0:
-        raise InputError(
-            f"width and height must be positive. Got width={width}, height={height}"
-        )
+        raise InputError("width and height must be positive.")
 
-    out = output_path(output, pdf_path.stem + "_redacted.pdf")
-    writer = PdfWriter()
-
-    for idx, page in enumerate(reader.pages):
-        if idx == page_num:
-            pw, ph = _page_dimensions(page)
-            overlay_buf = _build_rect_overlay(pw, ph, [(x, y, width, height)], fill_color)
-            overlay_page = PdfReader(overlay_buf).pages[0]
-            page.merge_page(overlay_page)
-        writer.add_page(page)
-
-    with open(out, "wb") as f:
-        writer.write(f)
-
-    return out
+    destination = output_path(output, source.stem + "_redacted.pdf")
+    with fitz.open(str(source)) as doc:
+        _assert_safe_source(doc)
+        if not isinstance(page_num, int) or not 0 <= page_num < doc.page_count:
+            raise InputError(
+                f"page_num must be between 0 and {doc.page_count - 1}; got {page_num}."
+            )
+        page = doc[page_num]
+        top = page.rect.height - y - height
+        rect = fitz.Rect(x, top, x + width, top + height)
+        if rect.is_empty or not rect.intersects(page.rect):
+            raise InputError("Redaction rectangle does not intersect the selected page.")
+        rect &= page.rect
+        page.add_redact_annot(rect, fill=color, cross_out=False)
+        _apply_page_redactions(page)
+        return _finish(doc, destination, ())
 
 
 def redact_text(
@@ -250,81 +197,35 @@ def redact_text(
     fill_color: tuple[float, float, float] = (0, 0, 0),
     pages: list[int] | None = None,
 ) -> Path:
-    """Find all occurrences of *search_term* and cover them with opaque boxes.
-
-    Text positions are estimated via pypdf's text-extraction visitor API and
-    a heuristic fallback.  The redaction rectangles are merged into each
-    page's content stream.
-
-    Parameters
-    ----------
-    input_pdf : str or Path
-        Path to the source PDF file.
-    search_term : str
-        Plain text to locate and redact (case-insensitive).
-    output : str, Path, or None
-        Destination path.  Defaults to ``<stem>_redacted.pdf``.
-    fill_color : tuple of float
-        RGB fill colour with each channel in ``[0, 1]``.  Defaults to black.
-    pages : list of int or None
-        Optional **1-indexed** page numbers to restrict the search to.
-        ``None`` means all pages.
-
-    Returns
-    -------
-    Path
-        The path to the redacted PDF.
-
-    Raises
-    ------
-    InputError
-        If the file is not a valid PDF, the search term is empty, or any
-        page number in *pages* is out of range.
-    """
-    pdf_path = ensure_pdf(input_pdf)
-    _validate_fill_color(fill_color)
-
-    if not search_term:
+    """Permanently remove every occurrence of a plain-text term."""
+    fitz = _fitz()
+    source = ensure_pdf(input_pdf)
+    color = _validate_fill_color(fill_color)
+    if not search_term or not search_term.strip():
         raise InputError("search_term must not be empty.")
 
-    reader = PdfReader(str(pdf_path))
-    num_pages = len(reader.pages)
+    destination = output_path(output, source.stem + "_redacted.pdf")
+    with fitz.open(str(source)) as doc:
+        _assert_safe_source(doc)
+        if pages is None:
+            targets = set(range(doc.page_count))
+        else:
+            if any(not isinstance(page, int) or not 1 <= page <= doc.page_count for page in pages):
+                raise InputError(f"Page numbers must be between 1 and {doc.page_count}.")
+            targets = {page - 1 for page in pages}
 
-    # Validate page list (1-indexed)
-    if pages is not None:
-        for p in pages:
-            if not isinstance(p, int) or p < 1 or p > num_pages:
-                raise InputError(
-                    f"Page numbers must be between 1 and {num_pages}. Got: {p}"
-                )
-        target_indices = {p - 1 for p in pages}
-    else:
-        target_indices = set(range(num_pages))
-
-    out = output_path(output, pdf_path.stem + "_redacted.pdf")
-    writer = PdfWriter()
-    redaction_count = 0
-
-    for idx, page in enumerate(reader.pages):
-        if idx in target_indices:
-            rects = _find_text_positions_on_page(page, search_term)
-            if rects:
-                pw, ph = _page_dimensions(page)
-                overlay_buf = _build_rect_overlay(pw, ph, rects, fill_color)
-                overlay_page = PdfReader(overlay_buf).pages[0]
-                page.merge_page(overlay_page)
-                redaction_count += len(rects)
-        writer.add_page(page)
-
-    if redaction_count == 0:
-        raise InputError(
-            f"Search term '{search_term}' was not found in the specified pages."
-        )
-
-    with open(out, "wb") as f:
-        writer.write(f)
-
-    return out
+        count = 0
+        for index in targets:
+            page = doc[index]
+            rectangles = page.search_for(search_term)
+            for rect in rectangles:
+                page.add_redact_annot(rect, fill=color, cross_out=False)
+            if rectangles:
+                _apply_page_redactions(page)
+                count += len(rectangles)
+        if not count:
+            raise InputError(f"Search term {search_term!r} was not found in the specified pages.")
+        return _finish(doc, destination, (search_term,))
 
 
 def search_and_redact(
@@ -333,83 +234,38 @@ def search_and_redact(
     output: str | Path | None = None,
     fill_color: tuple[float, float, float] = (0, 0, 0),
 ) -> Path:
-    """Redact all regex-pattern matches across the entire PDF.
-
-    Useful for bulk removal of sensitive data such as Social Security numbers,
-    e-mail addresses, phone numbers, and similar structured text.
-
-    Parameters
-    ----------
-    input_pdf : str or Path
-        Path to the source PDF file.
-    patterns : sequence of str
-        Regular expression patterns (as strings).  Each pattern is compiled
-        and matched against the extracted text of every page.
-    output : str, Path, or None
-        Destination path.  Defaults to ``<stem>_redacted.pdf``.
-    fill_color : tuple of float
-        RGB fill colour with each channel in ``[0, 1]``.  Defaults to black.
-
-    Returns
-    -------
-    Path
-        The path to the redacted PDF.
-
-    Raises
-    ------
-    InputError
-        If the file is not a valid PDF, *patterns* is empty, or a pattern
-        has invalid regex syntax.
-    """
-    pdf_path = ensure_pdf(input_pdf)
-    _validate_fill_color(fill_color)
-
+    """Permanently remove all extracted-text matches for regex patterns."""
+    fitz = _fitz()
+    source = ensure_pdf(input_pdf)
+    color = _validate_fill_color(fill_color)
     if not patterns:
         raise InputError("patterns must contain at least one regex pattern.")
+    try:
+        compiled = [re.compile(pattern) for pattern in patterns]
+    except re.error as exc:
+        raise InputError(f"Invalid regex pattern: {exc}") from exc
 
-    # Pre-compile patterns so syntax errors surface early.
-    compiled: list[re.Pattern] = []
-    for pat in patterns:
-        try:
-            compiled.append(re.compile(pat))
-        except re.error as exc:
-            raise InputError(f"Invalid regex pattern '{pat}': {exc}") from exc
-
-    reader = PdfReader(str(pdf_path))
-    out = output_path(output, pdf_path.stem + "_redacted.pdf")
-    writer = PdfWriter()
-    total_redactions = 0
-
-    for page in reader.pages:
-        all_rects: list[tuple[float, float, float, float]] = []
-
-        # Collect all unique match strings on this page.
-        full_text = page.extract_text() or ""
-        matched_terms: set[str] = set()
-        for regex in compiled:
-            for m in regex.finditer(full_text):
-                matched_terms.add(m.group())
-
-        # For each unique matched string, find approximate positions.
-        for term in matched_terms:
-            rects = _find_text_positions_on_page(page, term)
-            all_rects.extend(rects)
-
-        if all_rects:
-            pw, ph = _page_dimensions(page)
-            overlay_buf = _build_rect_overlay(pw, ph, all_rects, fill_color)
-            overlay_page = PdfReader(overlay_buf).pages[0]
-            page.merge_page(overlay_page)
-            total_redactions += len(all_rects)
-
-        writer.add_page(page)
-
-    if total_redactions == 0:
-        raise InputError(
-            "No matches found for the supplied patterns in the PDF."
-        )
-
-    with open(out, "wb") as f:
-        writer.write(f)
-
-    return out
+    destination = output_path(output, source.stem + "_redacted.pdf")
+    forbidden: set[str] = set()
+    count = 0
+    with fitz.open(str(source)) as doc:
+        _assert_safe_source(doc)
+        for page in doc:
+            page_text = page.get_text("text")
+            page_count = 0
+            for regex in compiled:
+                for match in regex.finditer(page_text):
+                    term = match.group(0)
+                    if not term:
+                        continue
+                    rectangles = page.search_for(term)
+                    for rect in rectangles:
+                        page.add_redact_annot(rect, fill=color, cross_out=False)
+                    page_count += len(rectangles)
+                    forbidden.add(term)
+            if page_count:
+                _apply_page_redactions(page)
+                count += page_count
+        if not count:
+            raise InputError("No matches found for the supplied patterns in the PDF.")
+        return _finish(doc, destination, forbidden)

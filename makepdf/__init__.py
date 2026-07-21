@@ -19,7 +19,7 @@ from makepdf.core.signer import sign, create_self_signed_cert, verify
 from makepdf.core.ocr import ocr_pdf, ocr_to_text
 
 # --- New Acrobat-style modules ---
-from makepdf.core.redaction import redact_area, redact_text, search_and_redact
+from makepdf.core.redaction import redact_area, redact_text, search_and_redact, verify_redaction
 from makepdf.core.cropper import crop_pages, resize_pages, trim_margins, set_page_boxes
 from makepdf.core.stamps import add_stamp, add_custom_stamp, add_image_stamp
 from makepdf.core.bates import add_bates_numbers, add_bates_to_batch
@@ -63,7 +63,7 @@ __all__ = [
     # OCR
     "ocr_pdf", "ocr_to_text",
     # Redaction
-    "redact_area", "redact_text", "search_and_redact",
+    "redact_area", "redact_text", "search_and_redact", "verify_redaction",
     # Cropper
     "crop_pages", "resize_pages", "trim_margins", "set_page_boxes",
     # Stamps

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from makepdf.config import TEMP_DIR
 from makepdf.core.creator import from_html, from_images, from_markdown, from_text
+from makepdf.web.intake import read_limited, save_upload
 from makepdf.web.shared import templates
 
 router = APIRouter(prefix="/create", tags=["create"])
@@ -46,7 +47,7 @@ async def create_from_html(
     page_size: str = Form("A4"),
 ):
     if html_file and html_file.filename:
-        content = (await html_file.read()).decode("utf-8")
+        content = (await read_limited(html_file, 5 * 1024 * 1024)).decode("utf-8")
     elif html_text:
         content = html_text
     else:
@@ -71,7 +72,7 @@ async def create_from_markdown(
     page_size: str = Form("A4"),
 ):
     if md_file and md_file.filename:
-        content = (await md_file.read()).decode("utf-8")
+        content = (await read_limited(md_file, 5 * 1024 * 1024)).decode("utf-8")
     elif md_text:
         content = md_text
     else:
@@ -100,11 +101,7 @@ async def create_from_images(
     try:
         for img in images:
             suffix = Path(img.filename or "image.png").suffix or ".png"
-            fd, tmp = tempfile.mkstemp(suffix=suffix, dir=str(TEMP_DIR))
-            os.close(fd)
-            tmp_path = Path(tmp)
-            tmp_path.write_bytes(await img.read())
-            image_paths.append(tmp_path)
+            image_paths.append((await save_upload(img, suffix)).path)
 
         fd, out_tmp = tempfile.mkstemp(suffix=".pdf", dir=str(TEMP_DIR))
         os.close(fd)

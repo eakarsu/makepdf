@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from makepdf.config import TEMP_DIR
 from makepdf.web.auth import require_api_key
 from makepdf.web.ai_helpers import (
     DEFAULT_MODEL,
@@ -26,11 +24,8 @@ _MAX_CHARS = 40_000  # ~10k tokens — keep cost low
 
 
 async def _save_upload(upload: UploadFile) -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, ".pdf")).path
 
 
 def _extract_text(pdf_path: Path) -> str:
@@ -44,25 +39,6 @@ def _extract_text(pdf_path: Path) -> str:
         if text:
             parts.append(text)
     return "\n\n".join(parts)
-
-
-def _ocr_extract_text(pdf_path: Path) -> str:
-    """OCR-based fallback for image-based PDFs. Returns empty string when OCR isn't available."""
-    try:
-        # Lazy import — OCR is an optional extra
-        from makepdf.core import ocr as ocr_mod
-        return ocr_mod.extract_text(pdf_path)  # type: ignore[attr-defined]
-    except Exception:
-        try:
-            import pytesseract
-            from pdf2image import convert_from_path
-        except ImportError:
-            return ""
-        try:
-            images = convert_from_path(str(pdf_path), dpi=200)
-            return "\n\n".join(pytesseract.image_to_string(img) for img in images)
-        except Exception:
-            return ""
 
 
 def _parse_summary_response(raw: str) -> dict:
@@ -87,8 +63,8 @@ async def summarize_pdf(
 ):
     """Extract text from a PDF and return an LLM-generated executive summary.
 
-    If pypdf returns no text the route automatically falls back to OCR (when
-    pytesseract / pdf2image are installed).
+    Scanned documents must first pass through the isolated asynchronous OCR
+    worker; this request never invokes native parsers in the API process.
     """
     api_openrouter = os.getenv("OPENROUTER_API_KEY")
     if not api_openrouter:
@@ -105,13 +81,15 @@ async def summarize_pdf(
     try:
         text = _extract_text(src)
         if not text.strip():
-            text = _ocr_extract_text(src)
             was_ocr_needed = True
     finally:
         src.unlink(missing_ok=True)
 
     if not text.strip():
-        raise HTTPException(status_code=422, detail="No text could be extracted from the PDF.")
+        raise HTTPException(
+            status_code=422,
+            detail="No text was extractable. Run the isolated async OCR workflow first.",
+        )
 
     word_count = len(text.split())
     if len(text) > _MAX_CHARS:

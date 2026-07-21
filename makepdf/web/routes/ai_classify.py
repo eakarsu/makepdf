@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from makepdf.config import TEMP_DIR
 from makepdf.web.auth import require_api_key
 from makepdf.web.ai_helpers import (
     DEFAULT_MODEL,
@@ -27,11 +25,8 @@ _MAX_CHARS = 10_000
 
 
 async def _save_upload(upload: UploadFile) -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, ".pdf")).path
 
 
 def _extract_first_pages_text(pdf_path: Path, max_pages: int = 2) -> str:

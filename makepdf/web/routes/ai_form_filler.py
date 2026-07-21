@@ -32,11 +32,8 @@ router = APIRouter(prefix="/api", tags=["ai"])
 
 
 async def _save_upload(upload: UploadFile) -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
+    from makepdf.web.intake import save_upload
+    return (await save_upload(upload, ".pdf")).path
 
 
 @router.post("/ai-fill-form", dependencies=[Depends(ai_rate_limiter)])

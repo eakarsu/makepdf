@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    command: ["api"]
+    env_file: ${MAKEPDF_ENV_FILE:-.env}
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["makepdf-data:/data"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["worker"]
+    env_file: ${MAKEPDF_ENV_FILE:-.env}
+    volumes: ["makepdf-data:/data"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=1g"]
+    network_mode: none
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    pids_limit: 64
+    mem_limit: 1536m
+    cpus: 2
+    restart: unless-stopped
+volumes:
+  makepdf-data:

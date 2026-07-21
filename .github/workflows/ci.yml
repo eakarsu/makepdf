@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --extra dev
+      - run: uv run pytest -q
+      - run: uv run ruff check --select E9,F63,F7,F82 makepdf tests
+      - run: uv build
+      - run: uvx pip-audit --strict
+
+  optional-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-deu clamav
+      - run: uv sync --locked --extra dev --extra ocr --extra html
+      - run: uv run pytest -q tests/test_optional_features.py tests/test_worker_integration.py tests/test_redaction.py tests/test_production_hardening.py
+      - run: docker build -t makepdf:test .

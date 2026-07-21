@@ -15,22 +15,16 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from makepdf.config import TEMP_DIR
-from makepdf.web.auth import require_api_key
-from makepdf.web.job_registry import Job, create_job, run_job, update_progress
+from makepdf.config import OBJECT_DIR, TEMP_DIR
+from makepdf.web.auth import Identity, require_identity
+from makepdf.web.governance import consume_quota, delete_document, register_document
+from makepdf.web.intake import save_upload
+from makepdf.web.job_registry import Job, create_job, update_progress
 
 router = APIRouter(prefix="/api/ocr", tags=["ocr", "jobs"])
-
-
-async def _save_upload(upload: UploadFile, suffix: str = ".pdf") -> Path:
-    fd, tmp = tempfile.mkstemp(suffix=suffix, dir=str(TEMP_DIR))
-    os.close(fd)
-    p = Path(tmp)
-    p.write_bytes(await upload.read())
-    return p
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +69,6 @@ async def _run_ocr_extract_text(src: Path, language: str, job: Job) -> Path:
     out_path = Path(out_tmp)
     out_path.write_text("\n\n".join(text_parts), encoding="utf-8")
 
-    src.unlink(missing_ok=True)
     return out_path
 
 
@@ -153,7 +146,6 @@ async def _run_ocr_make_searchable(src: Path, language: str, job: Job) -> Path:
     with open(out_path, "wb") as f:
         writer.write(f)
 
-    src.unlink(missing_ok=True)
     return out_path
 
 
@@ -165,22 +157,37 @@ async def _run_ocr_make_searchable(src: Path, language: str, job: Job) -> Path:
 async def async_ocr_extract_text(
     pdf_file: UploadFile = File(...),
     language: str = Form("eng"),
-    _auth: None = Depends(require_api_key),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=200),
+    identity: Identity = Depends(require_identity),
 ):
     """Submit an async OCR text-extraction job.
 
     Returns immediately with ``{"jobId": "..."}`` while processing continues
     in the background.  Poll ``GET /api/jobs/{jobId}`` for status.
     """
-    src = await _save_upload(pdf_file, ".pdf")
-
-    job = create_job()
-    job.extra["filename"] = "ocr_text.txt"
-
-    async def _task(j: Job) -> Path:
-        return await _run_ocr_extract_text(src, language, j)
-
-    asyncio.create_task(run_job(job, _task))
+    if not language.replace("+", "").replace("-", "").isalnum() or len(language) > 40:
+        raise HTTPException(status_code=422, detail="Invalid OCR language selection.")
+    intake = await save_upload(pdf_file, ".pdf", tenant_id=identity.tenant_id, durable=True)
+    consume_quota(identity, uploaded_bytes=intake.size, jobs=1)
+    document_id = register_document(identity, intake)
+    payload = {
+        "document_id": document_id,
+        "source_path": str(intake.path),
+        "source_sha256": intake.sha256,
+        "language": language,
+        "result_dir": str(OBJECT_DIR / identity.tenant_id),
+    }
+    try:
+        job = create_job(
+            tenant_id=identity.tenant_id, user_id=identity.user_id,
+            kind="ocr-extract-text", payload=payload,
+            idempotency_key=idempotency_key, filename="ocr_text.txt",
+        )
+    except ValueError as exc:
+        delete_document(identity, document_id)
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if job.payload.get("document_id") != document_id:
+        delete_document(identity, document_id)
 
     return JSONResponse(
         status_code=202,
@@ -197,22 +204,37 @@ async def async_ocr_extract_text(
 async def async_ocr_make_searchable(
     pdf_file: UploadFile = File(...),
     language: str = Form("eng"),
-    _auth: None = Depends(require_api_key),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=200),
+    identity: Identity = Depends(require_identity),
 ):
     """Submit an async OCR make-searchable job.
 
     Returns immediately with ``{"jobId": "..."}`` while processing continues
     in the background.  Poll ``GET /api/jobs/{jobId}`` for status.
     """
-    src = await _save_upload(pdf_file, ".pdf")
-
-    job = create_job()
-    job.extra["filename"] = "searchable.pdf"
-
-    async def _task(j: Job) -> Path:
-        return await _run_ocr_make_searchable(src, language, j)
-
-    asyncio.create_task(run_job(job, _task))
+    if not language.replace("+", "").replace("-", "").isalnum() or len(language) > 40:
+        raise HTTPException(status_code=422, detail="Invalid OCR language selection.")
+    intake = await save_upload(pdf_file, ".pdf", tenant_id=identity.tenant_id, durable=True)
+    consume_quota(identity, uploaded_bytes=intake.size, jobs=1)
+    document_id = register_document(identity, intake)
+    payload = {
+        "document_id": document_id,
+        "source_path": str(intake.path),
+        "source_sha256": intake.sha256,
+        "language": language,
+        "result_dir": str(OBJECT_DIR / identity.tenant_id),
+    }
+    try:
+        job = create_job(
+            tenant_id=identity.tenant_id, user_id=identity.user_id,
+            kind="ocr-make-searchable", payload=payload,
+            idempotency_key=idempotency_key, filename="searchable.pdf",
+        )
+    except ValueError as exc:
+        delete_document(identity, document_id)
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if job.payload.get("document_id") != document_id:
+        delete_document(identity, document_id)
 
     return JSONResponse(
         status_code=202,

@@ -52,6 +52,11 @@ def call_openrouter(
     max_tokens: Optional[int] = None,
 ) -> str:
     """Synchronous OpenRouter chat completion. Returns choices[0] content."""
+    if os.environ.get("MAKEPDF_ALLOW_EXTERNAL_AI", "").lower() not in {"1", "true", "yes"}:
+        raise HTTPException(
+            status_code=503,
+            detail="External AI processing is disabled by the data-processing boundary.",
+        )
     resolved_key = api_key or os.environ.get("OPENROUTER_API_KEY")
     if not resolved_key:
         raise HTTPException(
