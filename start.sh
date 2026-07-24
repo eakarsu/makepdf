@@ -4,6 +4,11 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="${RUNTIME_PROJECT_SOURCE:-$script_dir}"
 cd "$project_root"
+if [[ -f "$project_root/.env" ]]; then
+  set -a
+  source "$project_root/.env"
+  set +a
+fi
 python_bin=python
 if [[ -x "$project_root/.venv/bin/python" ]]; then
   python_bin="$project_root/.venv/bin/python"

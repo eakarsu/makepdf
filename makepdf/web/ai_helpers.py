@@ -45,7 +45,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 def call_openrouter(
     messages: list[dict],
     *,
-    api_key: Optional[str] = None,
+    api_key: Any = None,
     model: Optional[str] = None,
     temperature: float = 0.2,
     timeout: float = 60.0,
@@ -219,7 +219,8 @@ def persist_ai_result(
         api_key_hash = None
         if api_key:
             import hashlib
-            api_key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+            identity_key = getattr(api_key, "key_id", api_key)
+            api_key_hash = hashlib.sha256(str(identity_key).encode("utf-8")).hexdigest()[:16]
 
         with _conn() as c:
             c.execute(

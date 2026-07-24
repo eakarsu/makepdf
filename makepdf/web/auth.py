@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 
 from fastapi import HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.security.api_key import APIKeyHeader
 
 from makepdf.web.job_registry import _connect, append_audit, initialize as initialize_jobs
@@ -19,6 +20,7 @@ from makepdf.web.job_registry import _connect, append_audit, initialize as initi
 logger = logging.getLogger(__name__)
 ROLES = {"administrator", "operator", "auditor"}
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+_bearer_header = HTTPBearer(auto_error=False)
 
 
 @dataclass(frozen=True)
@@ -182,8 +184,12 @@ def authenticate_api_key(api_key: str | None) -> Identity | None:
     return None
 
 
-async def require_identity(api_key: str | None = Security(_api_key_header)) -> Identity:
-    identity = authenticate_api_key(api_key)
+async def require_identity(
+    api_key: str | None = Security(_api_key_header),
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_header),
+) -> Identity:
+    bearer_token = bearer.credentials if isinstance(bearer, HTTPAuthorizationCredentials) else None
+    identity = authenticate_api_key(api_key or bearer_token)
     if identity:
         return identity
     if not os.getenv("API_KEY") and os.getenv("MAKEPDF_ALLOW_OPEN_MODE", "").lower() in {"1", "true", "yes"}:
@@ -197,9 +203,12 @@ async def require_identity(api_key: str | None = Security(_api_key_header)) -> I
     )
 
 
-async def require_api_key(api_key: str | None = Security(_api_key_header)) -> Identity:
+async def require_api_key(
+    api_key: str | None = Security(_api_key_header),
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_header),
+) -> Identity:
     """Backward-compatible dependency name; now returns a tenant user identity."""
-    return await require_identity(api_key)
+    return await require_identity(api_key, bearer)
 
 
 def require_role(identity: Identity, *roles: str) -> None:

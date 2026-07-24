@@ -34,6 +34,8 @@ from makepdf.web.routes import (
     ai_audit,
     ai_results,
     governance,
+    runtime_ai,
+    runtime_auth,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,6 +195,8 @@ def create_app() -> FastAPI:
     app.include_router(ai_audit.router)
     app.include_router(ai_results.router)
     app.include_router(governance.router)
+    app.include_router(runtime_auth.router)
+    app.include_router(runtime_ai.router)
     from makepdf.web.routes import cloud_storage as _cs, workspaces as _ws, a11y_remediation as _ar, smart_table as _st, ediscovery as _ed, ocr_translate as _ot  # noqa: E402
     app.include_router(_cs.router)
     app.include_router(_ws.router)
