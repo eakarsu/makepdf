@@ -5,6 +5,17 @@
 <p style="color: var(--text-light); margin-bottom: 1.5rem;">
     Create, edit, merge, extract, transform, and sign PDFs right from your browser.
 </p>
+<section id="login-panel" class="card">
+    <h2>Secure workspace access</h2>
+    <form id="login-form">
+        <label for="login-email">Email</label><input id="login-email" type="email" autocomplete="username" required>
+        <label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required>
+        {% if demo_enabled %}<button id="fill-demo" class="btn btn-secondary" type="button">Auto Fill Demo Credentials</button>{% endif %}
+        <button class="btn" type="submit">Sign In</button><p id="login-status" class="hint" aria-live="polite"></p>
+    </form>
+</section>
+<section id="authenticated-dashboard" hidden>
+<h2>Authenticated PDF Operations Dashboard</h2><p id="authenticated-identity" class="hint"></p>
 <div class="grid">
     <a href="/create" class="card" style="text-decoration:none; color:inherit;">
         <h2>Create</h2>
@@ -91,4 +102,8 @@
         <p>Classify, summarize, redact PII, and fill forms with LLM assistance.</p>
     </a>
 </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>let sessionToken='';const loginForm=document.getElementById('login-form');const email=document.getElementById('login-email');const password=document.getElementById('login-password');const status=document.getElementById('login-status');const fill=document.getElementById('fill-demo');if(fill)fill.addEventListener('click',async()=>{status.textContent='';const response=await fetch('/api/auth/demo-credentials');if(!response.ok){status.textContent='Demo credentials are unavailable.';return}const credentials=await response.json();email.value=credentials.email;password.value=credentials.password;email.focus();status.textContent='Demo credentials filled. Select Sign In to continue.';});loginForm.addEventListener('submit',async(event)=>{event.preventDefault();status.textContent='Signing in…';const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email.value,password:password.value})});const body=await response.json();if(!response.ok){status.textContent='Sign in failed.';return}sessionToken=body.token;const me=await fetch('/api/auth/me',{headers:{'X-API-Key':sessionToken}});if(!me.ok){status.textContent='Session verification failed.';return}const identity=await me.json();password.value='';document.getElementById('authenticated-identity').textContent='Signed in as '+identity.user.email+' ('+identity.user.role+').';document.getElementById('login-panel').hidden=true;document.getElementById('authenticated-dashboard').hidden=false;history.replaceState(null,'','/#dashboard');});</script>
 {% endblock %}

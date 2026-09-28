@@ -19,6 +19,8 @@ class TestWebRoutes:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "MakePDF" in resp.text
+        assert "Sign In" in resp.text
+        assert "Authenticated PDF Operations Dashboard" in resp.text
 
     def test_create_page(self, client):
         resp = client.get("/create")

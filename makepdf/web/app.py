@@ -210,7 +210,10 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
-        return templates.TemplateResponse("index.html", {"request": request})
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "demo_enabled": os.getenv("MAKEPDF_ENV", "production") != "production",
+        })
 
     @app.get("/health")
     async def health():
