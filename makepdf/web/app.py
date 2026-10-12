@@ -254,3 +254,13 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+@app.get("/ai-workspace", include_in_schema=False)
+async def native_ai_workspace():
+    from pathlib import Path
+    from fastapi.responses import HTMLResponse
+    import secrets
+    nonce = secrets.token_hex(24)
+    html = (Path(__file__).parent / "static/js/ai-workspace.html").read_text().replace("__NONCE__", nonce)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store", "Content-Security-Policy": f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})

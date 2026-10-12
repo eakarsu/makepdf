@@ -56,6 +56,8 @@
         downloaded.
     </p>
     <form id="form_smart_redact" data-feature="smart-redact">
+        <div class="ai-presets" aria-label="Redaction examples"><button type="button" data-preset="default">General PII preview</button><button type="button" data-preset="hipaa">Medical privacy preview</button><button type="button" data-preset="pci">Payment data preview</button></div>
+        <p class="hint">Presets set the policy and preview option. Choose your actual PDF before running.</p>
         <label for="sr_file">PDF file</label>
         <input type="file" id="sr_file" name="pdf_file" accept=".pdf" required>
         <div class="row">
@@ -88,6 +90,8 @@
         the mapping before filling.
     </p>
     <form id="form_ai_fill" data-feature="ai-fill-form">
+        <div class="ai-presets" aria-label="Form fill examples"><button type="button" data-preset="contact">Contact details</button><button type="button" data-preset="invoice">Invoice details</button><button type="button" data-preset="application">Application details</button></div>
+        <p class="hint">Presets fill source data and enable preview. Choose your actual blank PDF form before running.</p>
         <label for="aff_file">Blank PDF form</label>
         <input type="file" id="aff_file" name="pdf_file" accept=".pdf" required>
         <label for="aff_source">Source data (JSON object)</label>
@@ -111,6 +115,7 @@
 
 {% endblock %}
 {% block extra_js %}
+<script src="/static/js/ai-report.js"></script>
 <script>
 (function () {
     var KEY_STORAGE = 'makepdf_api_key';
@@ -138,8 +143,7 @@
     }
 
     function renderJson(target, data) {
-        target.innerHTML = '<pre style="white-space:pre-wrap;background:var(--bg);padding:0.5rem;border-radius:var(--radius);">'
-            + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+        target.innerHTML = BrowserAIReport.render(data);
         target.classList.remove('hidden');
     }
 
@@ -220,6 +224,26 @@
             });
         });
     }
+
+    var examples = {
+        contact: {full_name: 'Maya Chen', email: 'maya.chen@example.com', phone: '212-555-0142', mailing_address: '42 Cedar Lane, Albany, NY 12207'},
+        invoice: {vendor: 'Northstar Office Supply', invoice_number: 'INV-2048', invoice_date: '2026-10-01', amount_due: '1250.00', billing_contact: 'Ari Patel'},
+        application: {applicant_name: 'Jordan Rivera', organization: 'Harbor Community Clinic', role: 'Program Coordinator', start_date: '2026-11-01', consent: true}
+    };
+    document.querySelectorAll('#form_ai_fill [data-preset]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var form = button.closest('form');
+            form.querySelector('#aff_source').value = JSON.stringify(examples[button.dataset.preset], null, 2);
+            form.querySelector('#aff_preview').checked = true;
+        });
+    });
+    document.querySelectorAll('#form_smart_redact [data-preset]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var form = button.closest('form');
+            form.querySelector('#sr_policy').value = button.dataset.preset;
+            form.querySelector('#sr_preview').checked = true;
+        });
+    });
 
     bindForm('form_classify', '/api/classify', 'result_classify');
     bindForm('form_summarize', '/api/summarize', 'result_summarize');

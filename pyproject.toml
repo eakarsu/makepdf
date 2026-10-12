@@ -36,4 +36,4 @@ build-backend = "setuptools.build_meta"
 include = ["makepdf*"]
 
 [tool.setuptools.package-data]
-"makepdf.web" = ["templates/*.html", "static/css/*.css", "static/js/*.js"]
+"makepdf.web" = ["templates/*.html", "static/css/*.css", "static/js/*.js", "static/js/*.html"]

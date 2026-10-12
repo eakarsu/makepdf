@@ -59,6 +59,7 @@
 
 {% endblock %}
 {% block extra_js %}
+<script src="/static/js/ai-report.js"></script>
 <script>
 (function() {
     var page = 1;
@@ -99,19 +100,18 @@
             '<strong>' + escapeHtml(row.feature || '?') + '</strong>',
             '<code>' + escapeHtml(row.model || '?') + '</code>',
             statusBadge,
-            (row.latency_ms != null ? row.latency_ms + ' ms' : '?'),
-            escapeHtml(row.created_at || '')
+            (row.latencyMs != null ? row.latencyMs + ' ms' : '?'),
+            escapeHtml(row.createdAt || '')
         ].join(' &middot; ');
 
         var details = '';
-        if (row.error_message) {
-            details += '<p style="color:var(--error);font-size:0.85rem;">' + escapeHtml(row.error_message) + '</p>';
+        if (row.errorMessage) {
+            details += '<p style="color:var(--error);font-size:0.85rem;">' + escapeHtml(row.errorMessage) + '</p>';
         }
         details += '<details style="margin-top:0.5rem;font-size:0.85rem;">'
-            + '<summary>Input / Output</summary>'
-            + '<pre style="white-space:pre-wrap;background:var(--bg);padding:0.5rem;border-radius:var(--radius);">'
-            + escapeHtml(JSON.stringify({input: row.input, output: row.output}, null, 2))
-            + '</pre></details>';
+            + '<summary>Input and output</summary>'
+            + BrowserAIReport.render({input: row.input, output: row.output})
+            + '</details>';
 
         return '<div style="border-bottom:1px solid var(--border);padding:0.75rem 0;">'
             + '<div style="font-size:0.9rem;">' + meta + '</div>'
