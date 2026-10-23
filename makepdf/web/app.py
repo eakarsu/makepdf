@@ -197,6 +197,9 @@ def create_app() -> FastAPI:
     app.include_router(governance.router)
     app.include_router(runtime_auth.router)
     app.include_router(runtime_ai.router)
+    from makepdf.web.routes import wave3c as _w3c  # noqa: E402
+    app.include_router(_w3c.router)
+    app.include_router(_w3c.page_router)
     from makepdf.web.routes import cloud_storage as _cs, workspaces as _ws, a11y_remediation as _ar, smart_table as _st, ediscovery as _ed, ocr_translate as _ot  # noqa: E402
     app.include_router(_cs.router)
     app.include_router(_ws.router)
@@ -214,6 +217,10 @@ def create_app() -> FastAPI:
             "request": request,
             "demo_enabled": os.getenv("MAKEPDF_ENV", "production") != "production",
         })
+
+    @app.get("/api/health")
+    async def api_health():
+        return {"status": "ok"}
 
     @app.get("/health")
     async def health():

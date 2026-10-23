@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Jobs, Tasks & AI - MakePDF{% endblock %}
+{% block heading %}PDF Jobs, Tasks &amp; AI{% endblock %}
+{% block content %}
+<div class="card">
+  <p>Authenticated PDF job tasks, job search/export, and AI over your own job records. AI uses a provider only when configured; otherwise a clearly labelled deterministic fallback is shown. Enter your <code>X-API-Key</code> to begin.</p>
+  <label for="w_api_key">X-API-Key</label>
+  <input type="password" id="w_api_key" placeholder="X-API-Key" autocomplete="off">
+  <div class="row">
+    <label>Search jobs <input id="w_search" type="search" placeholder="kind, id or stage"></label>
+    <label>Status
+      <select id="w_status"><option value="">Any status</option><option>queued</option><option>running</option><option>complete</option><option>failed</option></select>
+    </label>
+    <button type="button" class="btn" id="w_load">Load jobs</button>
+    <button type="button" class="btn btn-secondary" id="w_csv">Export CSV</button>
+    <button type="button" class="btn btn-secondary" id="w_json">Export JSON</button>
+  </div>
+  <pre id="w_jobs" class="result-box hidden"></pre>
+</div>
+<div class="card">
+  <h2>Job tasks</h2>
+  <form id="w_task_form"><label>New task <input id="w_task_title" required maxlength="200"></label> <button type="submit" class="btn">Add task</button></form>
+  <ul id="w_tasks"></ul>
+</div>
+<div class="card">
+  <h2>Job AI</h2>
+  <div class="row">
+    <button type="button" class="btn" data-ai="job-summary">Job summary</button>
+    <button type="button" class="btn" data-ai="document-checklist">Document checklist</button>
+    <button type="button" class="btn" data-ai="failed-job-diagnosis">Failed-job diagnosis</button>
+  </div>
+  <div id="w_ai"></div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const key = () => document.getElementById('w_api_key').value.trim();
+const headers = () => ({ 'X-API-Key': key(), 'Content-Type': 'application/json' });
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderSections(el, report) {
+  if (!report) { el.innerHTML = ''; return; }
+  const banner = report.aiGenerated ? `AI-generated (${esc(report.provider)})` : esc(report.label || 'Deterministic fallback — not AI-generated.');
+  let html = `<p><strong>${banner}</strong></p>`;
+  for (const [k, v] of Object.entries(report.sections || {})) {
+    const label = k.replace(/([a-z])([A-Z])/g, '$1 $2');
+    let val;
+    if (Array.isArray(v)) val = v.length ? `<ul>${v.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : 'None reported.';
+    else if (v && typeof v === 'object') val = Object.entries(v).map(([kk, vv]) => `<div>${esc(kk)}: ${esc(typeof vv === 'object' ? JSON.stringify(vv) : vv)}</div>`).join('');
+    else val = esc(v === '' ? 'Empty string' : v);
+    html += `<section><h3>${esc(label)}</h3>${val}</section>`;
+  }
+  el.innerHTML = html;
+}
+async function loadTasks() {
+  const res = await fetch('/api/wave3c/tasks', { headers: headers() });
+  const data = await res.json().catch(() => ({}));
+  document.getElementById('w_tasks').innerHTML = (data.data || []).map(t =>
+    `<li>${esc(t.title)} — ${esc(t.status)} <button type="button" data-task="${esc(t.id)}" data-status="${esc(t.status)}">${t.status === 'done' ? 'Reopen' : 'Mark done'}</button></li>`).join('');
+  document.querySelectorAll('[data-task]').forEach(btn => btn.addEventListener('click', async () => {
+    await fetch(`/api/wave3c/tasks/${btn.dataset.task}`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ status: btn.dataset.status === 'done' ? 'open' : 'done' }) });
+    loadTasks();
+  }));
+}
+document.getElementById('w_task_form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await fetch('/api/wave3c/tasks', { method: 'POST', headers: headers(), body: JSON.stringify({ title: document.getElementById('w_task_title').value }) });
+  document.getElementById('w_task_title').value = ''; loadTasks();
+});
+async function loadJobs() {
+  const q = new URLSearchParams({ search: document.getElementById('w_search').value, status: document.getElementById('w_status').value });
+  const res = await fetch(`/api/wave3c/jobs?${q}`, { headers: headers() });
+  const box = document.getElementById('w_jobs'); box.classList.remove('hidden');
+  box.textContent = JSON.stringify(await res.json().catch(() => ({})), null, 2);
+}
+document.getElementById('w_load').addEventListener('click', loadJobs);
+async function downloadExport(format) {
+  const q = new URLSearchParams({ format, search: document.getElementById('w_search').value, status: document.getElementById('w_status').value });
+  const res = await fetch(`/api/wave3c/jobs/export?${q}`, { headers: headers() });
+  const blob = await res.blob(); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `jobs.${format}`; a.click(); URL.revokeObjectURL(url);
+}
+document.getElementById('w_csv').addEventListener('click', () => downloadExport('csv'));
+document.getElementById('w_json').addEventListener('click', () => downloadExport('json'));
+document.querySelectorAll('[data-ai]').forEach(btn => btn.addEventListener('click', async () => {
+  const res = await fetch(`/api/wave3c/ai/${btn.dataset.ai}`, { method: 'POST', headers: headers() });
+  renderSections(document.getElementById('w_ai'), await res.json().catch(() => null));
+}));
+</script>
+{% endblock %}

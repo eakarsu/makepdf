@@ -18,17 +18,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-@router.get("/auth/demo-credentials")
-async def demo_credentials():
-    if os.getenv("MAKEPDF_ENV", "production") == "production":
-        raise HTTPException(status_code=404, detail="Demo credentials are unavailable in production")
-    email = os.getenv("ADMIN_EMAIL", "").strip().lower()
-    password = os.getenv("ADMIN_PASSWORD", "")
-    if not email or not password:
-        raise HTTPException(status_code=503, detail="Local demo credentials are not provisioned")
-    return {"email": email, "password": password}
-
-
 @router.post("/auth/login")
 async def login(payload: LoginRequest):
     expected_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
